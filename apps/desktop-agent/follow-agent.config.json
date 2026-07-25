@@ -1,0 +1,9 @@
+{
+  "apiUrl": "http://localhost:3001",
+  "apiKey": "wsp_your-agent-api-key-here",
+  "workspaceId": "1507e361-7d41-4b7f-bae3-64c387765886",
+  "folders": [],
+  "syncIntervalMs": 5000,
+  "maxFileSizeMb": 50,
+  "logLevel": "info"
+}

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* Inline all styles — Apps Script sidebars don't support external CSS */
+    :root {
+      --n50: #FAFAFA; --n100: #F4F4F5; --n150: #E8EAED; --n200: #E4E4E7;
+      --n400: #A1A1AA; --n500: #71717A; --n600: #52525B; --n800: #27272A;
+      --n900: #18181B; --ai: #6366F1; --aiS: #EEF2FF; --ok: #22C55E;
+      --wrn: #F59E0B; --src: #2563EB;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: var(--n800); background: #fff; }
+    .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--n400); margin-bottom: 8px; }
+    .card { background: var(--n50); border: 1px solid var(--n150); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--n200); font-size: 12px; cursor: pointer; background: #fff; color: var(--n800); transition: background 0.15s; }
+    .btn:hover { background: var(--n100); }
+    .btn-primary { background: var(--n900); color: #fff; border: none; }
+    .btn-primary:hover { background: #333; }
+    .tension-card { background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+    .tension-text { font-size: 12px; color: #92400E; }
+    .stat-box { display: inline-flex; flex-direction: column; padding: 8px 12px; border-radius: 6px; }
+    select, input { width: 100%; padding: 6px 10px; border: 1px solid var(--n200); border-radius: 6px; font-size: 12px; background: var(--n50); outline: none; }
+    select:focus, input:focus { border-color: var(--ai); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+    .source-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: var(--n100); border-radius: 4px; font-size: 11px; color: var(--n600); margin: 0 4px 4px 0; }
+    .source-chip button { border: none; background: none; cursor: pointer; color: var(--n400); font-size: 14px; line-height: 1; padding: 0; }
+    .loading-spinner { width: 16px; height: 16px; border: 2px solid var(--n200); border-top-color: var(--ai); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .divider { height: 1px; background: var(--n150); margin: 12px 0; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .status-dot.active { background: var(--ok); }
+    .status-dot.inactive { background: var(--n400); }
+  </style>
+</head>
+<body>
+  <div id="sidebar-root" style="padding: 12px;">
+    <!-- STATUS BAR -->
+    <div class="card" id="status-card" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <span class="status-dot inactive" id="status-dot"></span>
+      <span style="font-size: 12px; color: var(--n600);" id="status-text">Checking...</span>
+    </div>
+
+    <!-- CONTEXT CONTROLS -->
+    <div class="section-label">CONTEXT CONTROLS</div>
+    <div style="margin-bottom: 12px;">
+      <label style="font-size: 11px; color: var(--n500); margin-bottom: 4px; display: block;">Strand</label>
+      <select id="strand-select">
+        <option value="">Loading strands...</option>
+      </select>
+    </div>
+    <div style="margin-bottom: 16px;">
+      <label style="font-size: 11px; color: var(--n500); margin-bottom: 4px; display: block;">Context Depth</label>
+      <select id="context-depth">
+        <option value="low">Low &mdash; recent activity only</option>
+        <option value="medium" selected>Medium &mdash; balanced</option>
+        <option value="high">High &mdash; full history</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ATTACHED SOURCES -->
+    <div class="section-label">ATTACHED SOURCES</div>
+    <div id="sources-list" style="margin-bottom: 8px;"></div>
+    <button class="btn" onclick="addSource()" style="margin-bottom: 16px;">+ Add source</button>
+
+    <div class="divider"></div>
+
+    <!-- DOCUMENT INTELLIGENCE -->
+    <div class="section-label">DOCUMENT INTELLIGENCE</div>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <div class="stat-box" style="flex: 1; background: #F0FDF4; border: 1px solid #BBF7D0;">
+        <span style="font-size: 10px; color: #15803D; font-weight: 600;">Phase</span>
+        <span id="phase-value" style="font-size: 14px; color: #166534;">&mdash;</span>
+      </div>
+      <div class="stat-box" style="flex: 1; background: #EFF6FF; border: 1px solid #BFDBFE;">
+        <span style="font-size: 10px; color: #1D4ED8; font-weight: 600;">Intent</span>
+        <span id="intent-value" style="font-size: 14px; color: #1E40AF;">&mdash;</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ACTIVE TENSIONS -->
+    <div class="section-label">ACTIVE TENSIONS</div>
+    <div id="tensions-list" style="margin-bottom: 16px;">
+      <div style="font-size: 12px; color: var(--n400);">No tensions detected.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- QUICK ACTIONS -->
+    <div style="display: flex; gap: 6px;">
+      <button class="btn" onclick="openProvenance()" style="flex: 1;">Provenance</button>
+      <button class="btn" onclick="openThreadSpeaker()" style="flex: 1;">Thread Speaker</button>
+    </div>
+    <button class="btn btn-primary" onclick="analyzeDocument()" style="width: 100%; margin-top: 8px;">Analyze Document</button>
+  </div>
+
+  <script>
+    // ─── INITIALIZATION ────────────────────────────────────────────────────
+    var DOC_TYPE = window.FOLLOW_DOC_TYPE || 'docs';
+
+    document.addEventListener('DOMContentLoaded', function() {
+      checkStatus();
+      loadStrands();
+      loadDocIntelligence();
+      loadTensions();
+    });
+
+    // ─── STATUS CHECK ──────────────────────────────────────────────────────
+    function checkStatus() {
+      google.script.run
+        .withSuccessHandler(function(status) {
+          var dot = document.getElementById('status-dot');
+          var text = document.getElementById('status-text');
+          if (status && status.enabled) {
+            dot.className = 'status-dot active';
+            text.textContent = 'Smart Document Active';
+          } else {
+            dot.className = 'status-dot inactive';
+            text.textContent = 'Not Activated';
+          }
+        })
+        .withFailureHandler(function() {
+          document.getElementById('status-text').textContent = 'Connection error';
+        })
+        .getSmartDocStatus();
+    }
+
+    // ─── DATA LOADING ──────────────────────────────────────────────────────
+    function loadStrands() {
+      google.script.run
+        .withSuccessHandler(function(strands) {
+          var select = document.getElementById('strand-select');
+          select.innerHTML = '';
+          if (strands && strands.length > 0) {
+            strands.forEach(function(s) {
+              var opt = document.createElement('option');
+              opt.value = s.id;
+              opt.textContent = s.name;
+              if (s.isActive) opt.selected = true;
+              select.appendChild(opt);
+            });
+          } else {
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No strands available';
+            select.appendChild(opt);
+          }
+          var newOpt = document.createElement('option');
+          newOpt.value = '__new__';
+          newOpt.textContent = '+ Create new strand';
+          select.appendChild(newOpt);
+        })
+        .withFailureHandler(function(err) {
+          console.error('Failed to load strands:', err);
+        })
+        .getStrandsForDocument();
+    }
+
+    function loadDocIntelligence() {
+      google.script.run
+        .withSuccessHandler(function(intel) {
+          if (intel) {
+            document.getElementById('phase-value').textContent = intel.phase || '\u2014';
+            document.getElementById('intent-value').textContent = intel.intent || '\u2014';
+          }
+        })
+        .getDocumentIntelligence();
+    }
+
+    function loadTensions() {
+      google.script.run
+        .withSuccessHandler(function(tensions) {
+          var container = document.getElementById('tensions-list');
+          if (tensions && tensions.length > 0) {
+            container.innerHTML = tensions.map(function(t) {
+              return '<div class="tension-card"><div class="tension-text">' +
+                escapeHtml(t.description || t.text || JSON.stringify(t)) +
+                '</div></div>';
+            }).join('');
+          }
+        })
+        .getActiveTensions();
+    }
+
+    // ─── ACTIONS ───────────────────────────────────────────────────────────
+    function openProvenance() {
+      google.script.run.triggerProvenance();
+    }
+
+    function openThreadSpeaker() {
+      google.script.run.triggerAction('open_thread_speaker');
+    }
+
+    function analyzeDocument() {
+      google.script.run.triggerAction('analyze_document');
+    }
+
+    function addSource() {
+      google.script.run.triggerAction('add_source');
+    }
+
+    // Strand change handler
+    document.getElementById('strand-select').addEventListener('change', function() {
+      var strandId = this.value;
+      if (strandId === '__new__') {
+        google.script.run.triggerAction('create_strand');
+        // Reset select to previous value
+        loadStrands();
+      } else if (strandId) {
+        google.script.run.updateStrandAssociation(strandId);
+      }
+    });
+
+    // ─── HELPERS ───────────────────────────────────────────────────────────
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

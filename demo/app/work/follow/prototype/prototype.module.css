@@ -1,0 +1,74 @@
+/* Full-screen mount for the Follow sandbox — minimal chrome, the app is the
+   page. Inherits the burnt-orange accent from FOLLOW_ROOT_STYLE; declares its
+   own --navy (the case-study page scopes it to its own .page). */
+
+.page {
+  min-height: calc(100vh - var(--nav-h));
+  padding: 26px clamp(14px, 3vw, 44px) 48px;
+  background: var(--paper);
+  --navy: #0a1f33;
+}
+
+.head {
+  max-width: 1280px;
+  margin: 0 auto 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin: 0 0 6px;
+}
+
+.title {
+  font-size: clamp(26px, 3.4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.dot {
+  color: var(--accent);
+}
+
+.story {
+  max-width: 720px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--soft);
+}
+.story strong {
+  color: var(--ink);
+}
+
+.back {
+  font-size: 11px;
+  color: var(--soft);
+  text-decoration: none;
+  padding-bottom: 4px;
+}
+.back:hover {
+  color: var(--accent-deep);
+}
+
+.mount {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* mobile: hand the width to the app shell (it supplies its own frame) */
+@media (max-width: 719px) {
+  .page {
+    padding: 16px 10px 28px;
+  }
+  .story {
+    font-size: 12.5px;
+  }
+}

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; img-src * data:;">
+  <title>Nav Card Test</title>
+  <style>
+    body { background: #18181b; color: #e4e4e7; font-family: sans-serif; padding: 20px; }
+    .wa-messages { display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+    .wa-msg { padding: 10px; border-radius: 8px; }
+    .wa-msg-user { background: #7c3aed; align-self: flex-end; }
+    .wa-msg-assistant { background: #27272a; align-self: flex-start; }
+
+    /* Nav card styles - exact copy from popup.html */
+    .wa-nav-card { align-self: flex-start; width: 100%; border: 1px solid #3f3f46; border-radius: 10px; background: #1f1f23; overflow: hidden; }
+    .wa-nav-card-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #3f3f46; font-size: 11px; font-weight: 600; color: #a78bfa; }
+    .wa-nav-card-header .wa-nav-icon { width: 16px; height: 16px; border-radius: 4px; background: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 9px; color: white; flex-shrink: 0; }
+    .wa-nav-card-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .wa-nav-card-desc { font-size: 11px; color: #a1a1aa; line-height: 1.4; }
+    .wa-nav-link { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #27272a; border: 1px solid #3f3f46; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+    .wa-nav-link:hover { background: #3f3f46; border-color: #7c3aed; }
+    .wa-nav-link-favicon { width: 16px; height: 16px; border-radius: 3px; background: #3f3f46; flex-shrink: 0; }
+    .wa-nav-link-text { flex: 1; min-width: 0; }
+    .wa-nav-link-title { font-size: 12px; color: #e4e4e7; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-nav-link-url { font-size: 10px; color: #71717a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-nav-link-arrow { color: #7c3aed; font-size: 14px; flex-shrink: 0; }
+    .wa-nav-link-primary { border-color: #7c3aed; background: linear-gradient(135deg, #27272a 0%, #1e1b2e 100%); }
+    .wa-nav-link-primary .wa-nav-link-favicon { background: transparent; display: flex; align-items: center; justify-content: center; }
+    .wa-nav-link-primary .wa-nav-link-title { color: #c4b5fd; font-weight: 600; }
+
+    #result { margin-top: 20px; padding: 10px; background: #1a1a2e; border: 1px solid #3f3f46; border-radius: 8px; font-family: monospace; font-size: 11px; color: #6366f1; white-space: pre-wrap; }
+    #click-log { margin-top: 10px; padding: 10px; background: #1a2e1a; border: 1px solid #3f6f3f; border-radius: 8px; font-family: monospace; font-size: 11px; color: #22c55e; white-space: pre-wrap; min-height: 40px; }
+    button { background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin: 5px; font-size: 12px; }
+    button:hover { background: #6d28d9; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+    h4 { color: #a78bfa; margin: 15px 0 5px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>Nav Card Test Page</h3>
+  <p style="color:#71717a;font-size:12px;">Tests renderNavCard() — rendering, insertion order, click handlers, multi-layer navigation.</p>
+
+  <div class="btn-row">
+    <button id="btn-direct">Test 1: porsche.com (direct URL)</button>
+    <button id="btn-search">Test 2: search only (React docs)</button>
+    <button id="btn-broken">Test 3: broken URL fallback</button>
+  </div>
+  <div class="btn-row">
+    <button id="btn-multi">Test 4: multi-layer (3 cards)</button>
+    <button id="btn-extract">Test 5: extractDirectUrl</button>
+    <button id="btn-detect">Test 6: detectNavIntent</button>
+    <button id="btn-clear">Clear all</button>
+  </div>
+
+  <h4>Chat Messages</h4>
+  <div class="wa-messages" id="wa-messages">
+    <div class="wa-msg wa-msg-user">take me to porsche.com</div>
+    <div class="wa-msg wa-msg-assistant" id="assistant-msg">AI response will appear here...</div>
+  </div>
+
+  <h4>Debug Output</h4>
+  <div id="result">Test results will appear here...</div>
+
+  <h4>Click Log</h4>
+  <div id="click-log">Clicks will be logged here (instead of navigating)...</div>
+
+  <script>
+    // ─── Mock chrome API ────────────────────────────────────────
+    var els = { messages: document.getElementById('wa-messages') };
+    var clickLog = document.getElementById('click-log');
+    var resultEl = document.getElementById('result');
+    var clickCount = 0;
+
+    // ─── Client-side nav detection (exact copy from popup.js) ───
+    window.detectNavIntent = function(text) {
+      var lower = text.toLowerCase().trim();
+      var urlPattern = /(?:https?:\/\/)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.(?!js\b|ts\b|py\b|rb\b|go\b|rs\b|cs\b|md\b|sh\b)[a-zA-Z]{2,}(?:\/[^\s]*)?)/i;
+      var urlMatch = text.match(urlPattern);
+      var navPhrases = /\b(take me to|go to|open|navigate to|show me|visit|browse to|head to|bring up|pull up|load)\b/i;
+      var hasNavPhrase = navPhrases.test(lower);
+      if (urlMatch) {
+        var rawUrl = urlMatch[0];
+        var directUrl = rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl;
+        var hostname = rawUrl;
+        try { hostname = new URL(directUrl).hostname; } catch(e) {}
+        return {
+          isNavRequest: true, topic: hostname,
+          queries: [hostname + ' official website'],
+          sourcePreference: 'official', automationLevel: 'automate',
+          targetDescription: hostname + ' website', directUrl: directUrl
+        };
+      }
+      if (hasNavPhrase) {
+        var afterPhrase = lower.replace(navPhrases, '').trim();
+        var target = afterPhrase.replace(/^(the|a|an|my|this)\s+/i, '').trim();
+        if (target.length > 2 && target.length < 100) {
+          return {
+            isNavRequest: true, topic: target,
+            queries: [target, target + ' website', target + ' official site'],
+            sourcePreference: 'any', automationLevel: 'automate',
+            targetDescription: target, directUrl: ''
+          };
+        }
+      }
+      return null;
+    };
+
+    // ─── Functions from popup.js (exact copies) ─────────────────
+    window.escapeHtml = function(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    };
+
+    window.extractDirectUrl = function(navIntent) {
+      var allText = [
+        navIntent.targetDescription || '',
+        navIntent.topic || '',
+      ].concat(navIntent.queries || []).join(' ');
+      var urlPattern = /(?:https?:\/\/)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.(?!js\b|ts\b|py\b|rb\b|go\b|rs\b|cs\b|md\b|sh\b)[a-zA-Z]{2,}(?:\/[^\s]*)?)/i;
+      var match = allText.match(urlPattern);
+      if (match) {
+        var raw = match[0];
+        return raw.startsWith('http') ? raw : 'https://' + raw;
+      }
+      return null;
+    };
+
+    window.renderNavCard = function(navIntent) {
+      try {
+        console.log('[NavCard] Rendering nav card:', JSON.stringify(navIntent));
+        var card = document.createElement('div');
+        card.className = 'wa-nav-card';
+
+        var topic = navIntent.targetDescription || navIntent.topic || 'Navigation';
+        var queries = navIntent.queries || [];
+
+        var directUrl = null;
+        try {
+          var raw = navIntent.directUrl || window.extractDirectUrl(navIntent);
+          if (raw) { new URL(raw); directUrl = raw; }
+        } catch (e) { console.warn('[NavCard] Invalid directUrl'); }
+
+        var linksHtml = '';
+
+        if (directUrl) {
+          var hostname = new URL(directUrl).hostname;
+          linksHtml += '<div class="wa-nav-link wa-nav-link-primary" data-url="' + directUrl + '" title="Go to ' + hostname + '">' +
+            '<div class="wa-nav-link-favicon"><img src="https://www.google.com/s2/favicons?domain=' + hostname + '&sz=32" width="16" height="16" onerror="this.style.display=\'none\'" /></div>' +
+            '<div class="wa-nav-link-text">' +
+              '<div class="wa-nav-link-title">' + window.escapeHtml(hostname) + '</div>' +
+              '<div class="wa-nav-link-url">' + window.escapeHtml(directUrl) + '</div>' +
+            '</div>' +
+            '<span class="wa-nav-link-arrow">&#8594;</span>' +
+          '</div>';
+        }
+
+        for (var i = 0; i < queries.length; i++) {
+          var query = queries[i];
+          var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query);
+          linksHtml += '<div class="wa-nav-link" data-url="' + searchUrl + '" title="' + query + '">' +
+            '<div class="wa-nav-link-favicon" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:#a1a1aa;">&#128269;</div>' +
+            '<div class="wa-nav-link-text">' +
+              '<div class="wa-nav-link-title">' + window.escapeHtml(query) + '</div>' +
+              '<div class="wa-nav-link-url">google.com/search</div>' +
+            '</div>' +
+            '<span class="wa-nav-link-arrow">&#8594;</span>' +
+          '</div>';
+        }
+
+        card.innerHTML = '<div class="wa-nav-card-header"><span class="wa-nav-icon">&#9889;</span> Navigate</div>' +
+          '<div class="wa-nav-card-body"><div class="wa-nav-card-desc">' + window.escapeHtml(topic) + '</div>' + linksHtml + '</div>';
+
+        // Click handlers — LOG instead of navigating (for testing)
+        card.querySelectorAll('.wa-nav-link').forEach(function(link) {
+          link.addEventListener('click', function() {
+            var url = link.dataset.url;
+            clickCount++;
+            var title = link.querySelector('.wa-nav-link-title').textContent;
+            clickLog.textContent += '\n[' + clickCount + '] CLICKED: "' + title + '" → ' + url;
+            clickLog.scrollTop = clickLog.scrollHeight;
+          });
+        });
+
+        // Insert BEFORE the assistant message
+        var lastAssistant = els.messages.querySelector('.wa-msg-assistant:last-of-type');
+        if (lastAssistant) { els.messages.insertBefore(card, lastAssistant); }
+        else { els.messages.appendChild(card); }
+
+        var msg = 'SUCCESS: Nav card rendered with ' + queries.length + ' search links';
+        if (directUrl) msg += ' + direct: ' + directUrl;
+        resultEl.textContent += '\n' + msg;
+        return { success: true, links: queries.length + (directUrl ? 1 : 0), directUrl: directUrl };
+      } catch (err) {
+        console.error('[NavCard] RENDER ERROR:', err);
+        resultEl.textContent += '\nERROR: ' + err.message;
+        return { success: false, error: err.message };
+      }
+    };
+
+    window.clearCards = function() {
+      document.querySelectorAll('.wa-nav-card').forEach(function(c) { c.remove(); });
+      resultEl.textContent = 'Cleared.';
+      clickLog.textContent = 'Clicks will be logged here...';
+      clickCount = 0;
+    };
+
+    // ─── Test scenarios ─────────────────────────────────────────
+    window.testDirect = function() {
+      window.clearCards();
+      return window.renderNavCard({
+        isNavRequest: true,
+        topic: "Porsche",
+        queries: ["Porsche official website", "Porsche cars", "Porsche models"],
+        sourcePreference: "official",
+        automationLevel: "automate",
+        targetDescription: "Porsche's official website homepage",
+        directUrl: "https://porsche.com"
+      });
+    };
+
+    window.testSearch = function() {
+      window.clearCards();
+      return window.renderNavCard({
+        isNavRequest: true,
+        topic: "React documentation",
+        queries: ["React docs", "React getting started", "React tutorial"],
+        sourcePreference: "official",
+        automationLevel: "assist",
+        targetDescription: "React.js official documentation",
+        directUrl: ""
+      });
+    };
+
+    window.testBroken = function() {
+      window.clearCards();
+      return window.renderNavCard({
+        isNavRequest: true,
+        topic: "Test",
+        queries: ["test query"],
+        sourcePreference: "any",
+        automationLevel: "recommend",
+        targetDescription: "Testing broken URL",
+        directUrl: "not-a-valid-url"
+      });
+    };
+
+    window.testMultiLayer = function() {
+      window.clearCards();
+      // Reset assistant message
+      var aMsg = document.getElementById('assistant-msg');
+      if (aMsg) aMsg.textContent = 'Here are several pages for you...';
+
+      // Simulate 3 sequential nav requests (multi-layer)
+      window.renderNavCard({
+        isNavRequest: true,
+        topic: "YouTube",
+        queries: ["YouTube trending videos"],
+        sourcePreference: "official",
+        automationLevel: "automate",
+        targetDescription: "YouTube homepage",
+        directUrl: "https://youtube.com"
+      });
+
+      window.renderNavCard({
+        isNavRequest: true,
+        topic: "GitHub",
+        queries: ["GitHub repositories", "GitHub trending"],
+        sourcePreference: "official",
+        automationLevel: "automate",
+        targetDescription: "GitHub homepage",
+        directUrl: "https://github.com"
+      });
+
+      window.renderNavCard({
+        isNavRequest: true,
+        topic: "Stack Overflow",
+        queries: ["Stack Overflow questions", "programming help"],
+        sourcePreference: "any",
+        automationLevel: "assist",
+        targetDescription: "Stack Overflow homepage",
+        directUrl: "https://stackoverflow.com"
+      });
+    };
+
+    window.testExtractUrl = function() {
+      resultEl.textContent = 'Testing extractDirectUrl()...\n';
+      var tests = [
+        { input: { targetDescription: "porsche.com official site", queries: [] }, expected: "https://porsche.com" },
+        { input: { targetDescription: "Go to docs.google.com/spreadsheets", queries: [] }, expected: "https://docs.google.com/spreadsheets" },
+        { input: { targetDescription: "some topic", queries: ["youtube.com/watch?v=abc"] }, expected: "https://youtube.com/watch?v=abc" },
+        { input: { targetDescription: "just text no url", queries: ["no url here either"] }, expected: null },
+        { input: { targetDescription: "", topic: "reddit.com", queries: [] }, expected: "https://reddit.com" },
+        { input: { targetDescription: "React.js official documentation", queries: ["React docs"] }, expected: null },
+        { input: { targetDescription: "Node.js getting started", queries: [] }, expected: null },
+        { input: { targetDescription: "Visit react.dev for docs", queries: [] }, expected: "https://react.dev" },
+      ];
+      var passed = 0;
+      for (var i = 0; i < tests.length; i++) {
+        var t = tests[i];
+        var result = window.extractDirectUrl(t.input);
+        var ok = result === t.expected;
+        if (ok) passed++;
+        resultEl.textContent += (ok ? 'PASS' : 'FAIL') + ' [' + (i+1) + ']: ' +
+          JSON.stringify(t.input.targetDescription || t.input.topic).slice(0, 40) +
+          ' → ' + result + (ok ? '' : ' (expected: ' + t.expected + ')') + '\n';
+      }
+      resultEl.textContent += '\n' + passed + '/' + tests.length + ' tests passed';
+    };
+
+    window.testDetectNav = function() {
+      resultEl.textContent = 'Testing detectNavIntent()...\n';
+      var tests = [
+        { input: "take me to porsche.com", expectNav: true, expectUrl: "https://porsche.com" },
+        { input: "hi take me to porsche", expectNav: true, expectUrl: null },
+        { input: "open youtube.com/watch?v=abc", expectNav: true, expectUrl: "https://youtube.com/watch?v=abc" },
+        { input: "go to the settings page", expectNav: true, expectUrl: null },
+        { input: "show me the latest React docs", expectNav: true, expectUrl: null },
+        { input: "what is the weather today?", expectNav: false, expectUrl: null },
+        { input: "how does React work?", expectNav: false, expectUrl: null },
+        { input: "navigate to github.com", expectNav: true, expectUrl: "https://github.com" },
+        { input: "visit stackoverflow.com/questions", expectNav: true, expectUrl: "https://stackoverflow.com/questions" },
+        { input: "hello there", expectNav: false, expectUrl: null },
+      ];
+      var passed = 0;
+      for (var i = 0; i < tests.length; i++) {
+        var t = tests[i];
+        var result = window.detectNavIntent(t.input);
+        var isNav = result !== null;
+        var gotUrl = result ? result.directUrl || null : null;
+        var navOk = isNav === t.expectNav;
+        var urlOk = !t.expectUrl || gotUrl === t.expectUrl;
+        var ok = navOk && urlOk;
+        if (ok) passed++;
+        resultEl.textContent += (ok ? 'PASS' : 'FAIL') + ' [' + (i+1) + ']: "' + t.input + '"' +
+          ' → nav=' + isNav + (isNav && result.directUrl ? ' url=' + result.directUrl : '') +
+          (ok ? '' : ' (expected nav=' + t.expectNav + (t.expectUrl ? ' url=' + t.expectUrl : '') + ')') + '\n';
+      }
+      resultEl.textContent += '\n' + passed + '/' + tests.length + ' tests passed';
+
+      // Also render a card from detection
+      window.clearCards();
+      var nav = window.detectNavIntent("take me to porsche.com");
+      if (nav) window.renderNavCard(nav);
+    };
+
+    // ─── Bind buttons with addEventListener ────────────────────
+    document.getElementById('btn-direct').addEventListener('click', window.testDirect);
+    document.getElementById('btn-search').addEventListener('click', window.testSearch);
+    document.getElementById('btn-broken').addEventListener('click', window.testBroken);
+    document.getElementById('btn-multi').addEventListener('click', window.testMultiLayer);
+    document.getElementById('btn-extract').addEventListener('click', window.testExtractUrl);
+    document.getElementById('btn-detect').addEventListener('click', window.testDetectNav);
+    document.getElementById('btn-clear').addEventListener('click', window.clearCards);
+
+    resultEl.textContent = 'Ready. Click a test button or call window.testDirect() etc.';
+  </script>
+</body>
+</html>

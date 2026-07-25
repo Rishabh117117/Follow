@@ -1,0 +1,1 @@
+ALTER TABLE "index_records" ADD COLUMN "superseded_at" timestamp with time zone;

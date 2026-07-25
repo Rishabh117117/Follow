@@ -1,0 +1,303 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Follow v6 White Mode ─────────────────────────────── */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --radius: 0.5rem;
+
+    /* ── Page chrome tokens ──────────────────────────────── */
+    --page-bg: #F6F6F6;
+    --page-edge: #E0E0E0;
+
+    /* ── Neutral scale (recalibrated for white mode) ─────── */
+    --n50: #FAFAF9;
+    --n100: #F5F5F3;
+    --n150: #EBEBEB;
+    --n200: #E0E0DC;
+    --n300: #C5C5C0;
+    --n400: #9CA3AF;
+    --n500: #6B7280;
+    --n600: #4B5563;
+    --n700: #374151;
+    --n800: #1F2937;
+    --n900: #111827;
+    --n950: #030712;
+
+    /* ── Semantic color tokens ────────────────────────────── */
+    --ai: #6366F1;
+    --aiS: #EEF2FF;
+    --aiMuted: #A5B4FC;
+    --src: #0EA5E9;
+    --srcS: #E0F2FE;
+    --ok: #22C55E;
+    --okS: #F0FDF4;
+    --wrn: #F59E0B;
+    --wrnS: #FFFBEB;
+    --err: #EF4444;
+    --errS: #FEF2F2;
+  }
+
+  /* ── Dark mode overrides (Dev mode keeps dark) ─────────── */
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--n100);
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    @apply bg-zinc-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: var(--n300);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-700;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--n400);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-600;
+  }
+}
+
+/* Google Docs–style editor typography (Follow mode) */
+.prose-lg {
+  font-family: 'Arial', system-ui, -apple-system, sans-serif;
+  color: #202124;
+}
+
+.prose-lg h1 {
+  font-size: 24pt !important;
+  font-weight: 400 !important;
+  color: #202124;
+  margin-top: 1.5em !important;
+  margin-bottom: 0.5em !important;
+  line-height: 1.3 !important;
+}
+
+.prose-lg h2 {
+  font-size: 18pt !important;
+  font-weight: 400 !important;
+  color: #202124;
+  margin-top: 1.3em !important;
+  margin-bottom: 0.4em !important;
+  line-height: 1.35 !important;
+}
+
+.prose-lg h3 {
+  font-size: 14pt !important;
+  font-weight: 600 !important;
+  color: #434343;
+  margin-top: 1.2em !important;
+  margin-bottom: 0.3em !important;
+  line-height: 1.4 !important;
+}
+
+.prose-lg p {
+  font-size: 11pt;
+  line-height: 1.75;
+  margin-top: 0;
+  margin-bottom: 0.5em;
+}
+
+.prose-lg ul,
+.prose-lg ol {
+  font-size: 11pt;
+  padding-left: 1.5em;
+}
+
+.prose-lg blockquote {
+  border-left: 3px solid #DADCE0;
+  padding-left: 1em;
+  color: #5F6368;
+  font-style: italic;
+}
+
+.prose-lg code {
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  font-size: 10pt;
+  background: #F1F3F4;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.prose-lg pre {
+  background: #F8F9FA;
+  border: 1px solid #DADCE0;
+  border-radius: 4px;
+  padding: 12px 16px;
+}
+
+.prose-lg pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.prose-lg a {
+  color: #1A73E8;
+  text-decoration: none;
+}
+
+.prose-lg a:hover {
+  text-decoration: underline;
+}
+
+.prose-lg hr {
+  border-color: #DADCE0;
+}
+
+.prose-lg table {
+  border-collapse: collapse;
+}
+
+.prose-lg table th,
+.prose-lg table td {
+  border: 1px solid #DADCE0;
+  padding: 6px 12px;
+}
+
+.prose-lg table th {
+  background: #F1F3F4;
+  font-weight: 600;
+}
+
+/* Document Intelligence — suggestion underlines */
+.doc-suggestion {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.doc-suggestion-clarity {
+  text-decoration-color: #f59e0b;
+}
+.doc-suggestion-conciseness {
+  text-decoration-color: #3b82f6;
+}
+.doc-suggestion-tone {
+  text-decoration-color: #8b5cf6;
+}
+.doc-suggestion-grammar {
+  text-decoration-color: #10b981;
+}
+.doc-suggestion-structure {
+  text-decoration-color: #f43f5e;
+}
+.doc-suggestion-custom {
+  text-decoration-color: #a855f7;
+}
+.doc-suggestion-dimmed {
+  opacity: 0.3;
+}
+
+/* AI Annotation — freeform annotation underlines from chat */
+.ai-annotation {
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.ai-annotation-important {
+  text-decoration-color: #6366f1;
+}
+.ai-annotation-definition {
+  text-decoration-color: #14b8a6;
+}
+.ai-annotation-conclusion {
+  text-decoration-color: #f59e0b;
+}
+.ai-annotation-evidence {
+  text-decoration-color: #3b82f6;
+}
+.ai-annotation-argument {
+  text-decoration-color: #ec4899;
+}
+.ai-annotation-dimmed {
+  opacity: 0.3;
+}
+
+/* Follow UX animations */
+@keyframes scaleIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Sprint M3 — Ghost/Revision commit settle animation */
+.just-committed {
+  border-left: 2px solid rgba(22, 163, 74, 0.4);
+  background: rgba(22, 163, 74, 0.03);
+  border-radius: 3px;
+  padding: 2px 4px;
+  transition: all 3s ease-out;
+}
+
+.just-committed-label {
+  font-size: 7px;
+  font-family: var(--fm, ui-monospace, monospace);
+  color: rgba(22, 163, 74, 0.56);
+  margin-top: 2px;
+  transition: opacity 3s ease-out;
+}
+
+.just-committed.fading {
+  border-left-color: transparent;
+  background: transparent;
+}
+
+.just-committed-label.fading {
+  opacity: 0;
+}

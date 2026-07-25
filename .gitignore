@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+.turbo/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker volumes
+postgres_data/
+redis_data/
+clickhouse_data/
+minio_data/
+
+# Docker env (contains local credentials)
+.env.docker
+.ngrok-authtoken
+
+# Runtime state written by the running API + dashboard — not source
+data/queue-state.json
+data/model-overrides.json
+data/.dashboard-token
+# Ephemeral PGlite DB created when the API/tests run without DATABASE_URL
+data/pglite/
+
+# OpenRouter catalog snapshot (periodically stale, regenerated at runtime)
+tmp_models.json
+
+# Windows `nul` file (accidental `... > nul` redirect artefact)
+nul
+
+# LAUNCHER-LOG-BUFFER-1 (2026-04-23): API child-process stdout is tee'd to
+# logs/api.log by the launcher for diagnostic purposes. Per-launch, grows
+# append-only. Future log rotation not in scope.
+logs/

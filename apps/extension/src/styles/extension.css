@@ -1,0 +1,7 @@
+/* Follow Extension — minimal host page styles */
+follow-extension,
+follow-ui {
+  all: initial;
+  position: fixed;
+  z-index: 2147483647;
+}

@@ -1,0 +1,2327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Follow Dev Console</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #07080c;
+  --card: #0d0f15;
+  --border: #1a1d28;
+  --text: #c8ccd8;
+  --text-dim: #6b7085;
+  --accent: #6C63FF;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --cyan: #22d3ee;
+  --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+}
+body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; }
+.console-shell { display: flex; flex-direction: column; height: 100vh; }
+.console-header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px; border-bottom: 1px solid var(--border);
+  background: var(--card); flex-shrink: 0;
+}
+.console-header .brand { font-size: 18px; font-weight: 600; color: var(--accent); letter-spacing: -0.5px; }
+.console-header .badge {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 1.5px; background: var(--accent); color: #fff;
+  padding: 3px 8px; border-radius: 3px;
+}
+.console-header .status-pill {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--green); margin-left: auto;
+}
+.console-header .host {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-green { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,0.4); }
+.dot-amber { background: var(--amber); box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+.dot-red { background: var(--red); box-shadow: 0 0 6px rgba(248,113,113,0.4); }
+.dot-gray { background: #3a3f52; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.dot-pulse { animation: pulse 2s ease-in-out infinite; }
+
+.tab-bar {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  background: var(--card); padding: 0 24px; flex-shrink: 0;
+}
+.tab-btn {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 400;
+  color: var(--text-dim); background: none; border: none;
+  padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+.tab-content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* Cards & grids */
+.stat-grid { display: grid; gap: 12px; margin-bottom: 24px; }
+.stat-grid-5 { grid-template-columns: repeat(5, 1fr); }
+.stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.stat-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px;
+}
+.stat-card .label { font-family: var(--font-mono); font-size: 9px; font-weight: 500; letter-spacing: 1.2px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+.stat-card .value { font-size: 24px; font-weight: 600; color: #fff; }
+.stat-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+.section-title {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 1.5px; color: var(--text-dim); text-transform: uppercase;
+  margin-bottom: 12px; margin-top: 8px;
+}
+
+.service-table {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; margin-bottom: 24px;
+}
+.service-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.service-row:last-child { border-bottom: none; }
+.service-row .name { width: 120px; font-weight: 500; }
+.service-row .status-label { font-family: var(--font-mono); font-size: 11px; }
+.service-row .detail { flex: 1; color: var(--text-dim); font-size: 11px; }
+.service-row .port-badge {
+  font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);
+  background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 3px;
+}
+
+/* MCP tools */
+.tool-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px; cursor: pointer;
+}
+.tool-row:hover { background: rgba(255,255,255,0.02); }
+.tool-row .tool-name { font-family: var(--font-mono); font-weight: 500; width: 180px; }
+.tool-row .tool-stat { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+.tool-expanded { padding: 8px 16px 16px 38px; font-size: 11px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: rgba(108,99,255,0.03); }
+.error-badge { font-family: var(--font-mono); font-size: 9px; background: rgba(248,113,113,0.15); color: var(--red); padding: 1px 6px; border-radius: 3px; }
+
+/* Endpoint rows */
+.endpoint-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.endpoint-row .ep-label { width: 100px; font-weight: 500; color: var(--text-dim); }
+.endpoint-row .ep-url { font-family: var(--font-mono); color: var(--accent); flex: 1; word-break: break-all; }
+.copy-btn {
+  font-family: var(--font-mono); font-size: 9px; background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border); color: var(--text-dim); padding: 3px 10px;
+  border-radius: 4px; cursor: pointer;
+}
+.copy-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+/* Pipeline */
+.pipeline-flow { display: flex; align-items: center; gap: 0; margin-bottom: 24px; flex-wrap: wrap; }
+.pipeline-stage {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 18px; min-width: 120px; text-align: center;
+}
+.pipeline-stage .stage-name { font-family: var(--font-mono); font-size: 11px; font-weight: 500; margin-bottom: 4px; }
+.pipeline-stage .stage-status { font-size: 10px; color: var(--text-dim); }
+.pipeline-arrow { font-size: 16px; color: var(--text-dim); padding: 0 6px; }
+
+/* Bar chart rows */
+.bar-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.bar-label { width: 120px; font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+.bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+.bar-count { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); width: 50px; text-align: right; }
+
+/* Users table */
+.users-table { width: 100%; border-collapse: collapse; }
+.users-table th {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase;
+  text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.users-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.users-table tr:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
+.user-cell { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.app-pill {
+  font-family: var(--font-mono); font-size: 9px; padding: 2px 8px;
+  border-radius: 10px; display: inline-block; margin-right: 4px;
+}
+
+/* Logs */
+.log-viewer {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; font-family: var(--font-mono); font-size: 10px;
+  line-height: 1.7; min-height: 300px; max-height: 500px; overflow-y: auto;
+  color: var(--text-dim);
+}
+.log-line-success { color: var(--green); }
+.log-line-error { color: var(--red); }
+.log-line-warn { color: var(--amber); }
+
+/* Traffic table */
+.traffic-table { width: 100%; border-collapse: collapse; }
+.traffic-table th {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase;
+  text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.traffic-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; font-family: var(--font-mono); }
+
+/* Sub-tabs */
+.sub-tabs { display: flex; gap: 2px; margin-bottom: 12px; }
+.sub-tab {
+  font-family: var(--font-mono); font-size: 10px; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border); color: var(--text-dim);
+  padding: 6px 14px; border-radius: 4px; cursor: pointer;
+}
+.sub-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Connection error banner */
+.error-banner {
+  background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
+  color: var(--red); padding: 10px 16px; border-radius: 6px; margin-bottom: 16px;
+  font-size: 12px; display: flex; align-items: center; gap: 8px;
+}
+
+/* Cost model bars */
+.cost-bar-label { width: 170px; }
+
+/* Resource cards */
+.resource-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px;
+}
+.resource-card .res-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.resource-card .res-name { font-weight: 500; font-size: 12px; }
+.res-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 10px; }
+.res-bar-label { width: 50px; color: var(--text-dim); font-family: var(--font-mono); }
+.res-bar-track { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+.res-bar-fill { height: 100%; border-radius: 2px; }
+.res-bar-value { width: 40px; text-align: right; font-family: var(--font-mono); color: var(--text-dim); }
+
+/* Drilldown */
+.back-btn {
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent);
+  background: none; border: none; cursor: pointer; margin-bottom: 16px;
+  padding: 0;
+}
+.back-btn:hover { text-decoration: underline; }
+.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.profile-header .avatar-lg {
+  width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 600;
+}
+
+/* Models tab */
+.tier-row {
+  display: grid; grid-template-columns: 200px 1fr 130px 120px 80px;
+  gap: 12px; align-items: center;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.tier-row:last-child { border-bottom: none; }
+.tier-row .tier-name { font-family: var(--font-mono); font-weight: 500; }
+.tier-row .tier-default { font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); }
+.tier-row .tier-selector {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 6px 8px; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 11px; width: 100%;
+}
+.tier-row .tier-selector:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.tier-row .tier-usage { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); text-align: right; }
+.tier-row .overridden-pill {
+  font-family: var(--font-mono); font-size: 9px;
+  background: rgba(108,99,255,0.15); color: var(--accent);
+  padding: 2px 6px; border-radius: 3px;
+}
+.save-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; background: rgba(108,99,255,0.06);
+  border: 1px solid var(--accent); border-radius: 8px;
+  margin-bottom: 16px;
+}
+.primary-btn {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  background: var(--accent); color: #fff; border: none;
+  padding: 8px 16px; border-radius: 4px; cursor: pointer;
+}
+.primary-btn:hover { opacity: 0.9; }
+.primary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ghost-btn {
+  font-family: var(--font-mono); font-size: 11px;
+  background: rgba(255,255,255,0.05); color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+}
+.ghost-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+/* Index jobs */
+.job-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.job-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.job-label { font-weight: 500; font-size: 13px; flex: 1; }
+.job-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+.job-progress-track {
+  height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;
+  margin: 6px 0;
+}
+.job-progress-fill {
+  height: 100%; background: var(--accent); border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.job-progress-fill.done { background: var(--green); }
+.job-progress-fill.error { background: var(--red); }
+.job-progress-fill.cancelled { background: var(--text-dim); }
+.job-phase-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  margin-top: 4px;
+}
+.phase-pill {
+  font-family: var(--font-mono); font-size: 9px; padding: 2px 8px;
+  border-radius: 10px; text-transform: uppercase; letter-spacing: 1px;
+}
+.phase-pill.queued { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+.phase-pill.chunking, .phase-pill.enriching, .phase-pill.embedding, .phase-pill.storing {
+  background: rgba(108,99,255,0.15); color: var(--accent);
+}
+.phase-pill.done { background: rgba(52,211,153,0.15); color: var(--green); }
+.phase-pill.error { background: rgba(248,113,113,0.15); color: var(--red); }
+.phase-pill.cancelled { background: rgba(107,112,133,0.2); color: var(--text-dim); }
+
+/* Usage panels */
+.credit-hero {
+  background: linear-gradient(135deg, rgba(108,99,255,0.12), rgba(34,211,238,0.06));
+  border: 1px solid rgba(108,99,255,0.3);
+  border-radius: 10px; padding: 20px 24px; margin-bottom: 16px;
+}
+.credit-hero .hero-label {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px;
+  color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px;
+}
+.credit-hero .hero-value { font-size: 28px; font-weight: 600; color: #fff; }
+.credit-hero .hero-sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; font-family: var(--font-mono); }
+
+.sparkline { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin: 6px 0; }
+.spark-bar { flex: 1; background: var(--accent); opacity: 0.7; border-radius: 2px 2px 0 0; min-height: 1px; }
+.spark-bar:hover { opacity: 1; }
+
+.recent-row {
+  display: grid; grid-template-columns: 80px 160px 100px 100px 80px 80px;
+  gap: 10px; align-items: center;
+  padding: 6px 12px; border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+}
+.recent-row:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ─── Data fetching ───
+function useHealthData() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/health');
+        // Accept 200 (healthy) AND 503 (degraded but responding — fallback modes)
+        if (res.status !== 200 && res.status !== 503) {
+          throw new Error('HTTP ' + res.status);
+        }
+        const json = await res.json();
+        if (mounted) { setData(json); setError(false); }
+      } catch {
+        if (mounted) setError(true);
+      }
+    };
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  return { data, error };
+}
+
+function useUsersStats() {
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/users/stats');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        if (mounted) { setUsers(Array.isArray(json?.data) ? json.data : []); setError(false); }
+      } catch {
+        if (mounted) setError(true);
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  return { users, error };
+}
+
+function useLauncherStatus() {
+  const [launcher, setLauncher] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const json = await res.json();
+        if (mounted) setLauncher(json);
+      } catch {
+        // non-fatal
+      }
+    };
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  return launcher;
+}
+
+// ─── Utilities ───
+function statusColor(status) {
+  if (status === 'ok' || status === 'running' || status === 'healthy') return 'var(--green)';
+  if (status === 'fallback' || status === 'degraded') return 'var(--amber)';
+  if (status === 'error') return 'var(--red)';
+  return 'var(--text-dim)';
+}
+function dotClass(status) {
+  if (status === 'ok' || status === 'running' || status === 'healthy') return 'dot dot-green dot-pulse';
+  if (status === 'fallback' || status === 'degraded') return 'dot dot-amber';
+  if (status === 'error') return 'dot dot-red';
+  return 'dot dot-gray';
+}
+function statusText(status) {
+  if (status === 'ok' || status === 'running') return 'Running';
+  if (status === 'fallback') return 'Fallback';
+  if (status === 'error') return 'Error';
+  return 'Unknown';
+}
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text);
+}
+function formatUptime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ─── Stat Card ───
+function StatCard({ label, value, sub }) {
+  return (
+    <div className="stat-card">
+      <div className="label">{label}</div>
+      <div className="value">{value}</div>
+      {sub && <div className="sub">{sub}</div>}
+    </div>
+  );
+}
+
+// ─── Service Row ───
+function ServiceRow({ dotStatus, name, statusLabel, detail, port }) {
+  return (
+    <div className="service-row">
+      <span className={dotClass(dotStatus)} />
+      <span className="name">{name}</span>
+      <span className="status-label" style={{ color: statusColor(dotStatus) }}>{statusLabel}</span>
+      <span className="detail">{detail}</span>
+      {port && <span className="port-badge">:{port}</span>}
+    </div>
+  );
+}
+
+// ─── Overview Tab ───
+function OverviewTab({ data }) {
+  const launcher = useLauncherStatus();
+  if (!data) return <div style={{color: 'var(--text-dim)'}}>Loading health data...</div>;
+
+  const tunnelUrl = launcher?.ngrok?.url || data.config?.publicUrl || '';
+  const toolCount = data.mcp?.toolNames?.length || data.mcp?.tools || 0;
+  const sessions = data.mcp?.activeSessions || 0;
+  const records = data.index?.records ?? data.index?.totalRecords ?? 0;
+  const edges = data.index?.edges ?? 0;
+  const clients = data.mcp?.clients || [];
+
+  return (
+    <div>
+      <div className="stat-grid stat-grid-5">
+        <StatCard label="MCP Tools" value={toolCount} sub="All healthy" />
+        <StatCard label="Connected Clients" value={sessions} sub={sessions > 0 ? 'SSE transport' : 'No active sessions'} />
+        <StatCard label="Index Records" value={records.toLocaleString()} sub="+0 today" />
+        <StatCard label="API Calls/hr" value="—" sub="Estimated" />
+        <StatCard label="Knowledge Edges" value={edges.toLocaleString()} />
+      </div>
+
+      <div className="stat-grid stat-grid-2">
+        <div>
+          <div className="section-title">Infrastructure</div>
+          <div className="service-table">
+            <ServiceRow dotStatus={data.checks?.postgres?.status} name="PostgreSQL" statusLabel={statusText(data.checks?.postgres?.status)} detail={data.checks?.postgres?.latency ? data.checks.postgres.latency + 'ms' : ''} port="5432" />
+            <ServiceRow dotStatus={data.checks?.redis?.status} name="Redis" statusLabel={statusText(data.checks?.redis?.status)} detail={data.checks?.redis?.latency ? data.checks.redis.latency + 'ms' : ''} port="6379" />
+            <ServiceRow dotStatus={data.checks?.clickhouse?.status} name="ClickHouse" statusLabel={statusText(data.checks?.clickhouse?.status)} detail={data.checks?.clickhouse?.status === 'fallback' ? 'In-memory mode' : ''} port="8123" />
+            <ServiceRow dotStatus={data.checks?.s3?.status} name="MinIO/S3" statusLabel={statusText(data.checks?.s3?.status)} detail="" port="9090" />
+            <ServiceRow dotStatus="ok" name="Yjs WebSocket" statusLabel="Running" detail="Sync server" port="3003" />
+          </div>
+        </div>
+        <div>
+          <div className="section-title">Services</div>
+          <div className="service-table">
+            <ServiceRow dotStatus={data.status === 'healthy' ? 'ok' : 'error'} name="API Server" statusLabel="Hono" detail={data.status || 'unknown'} port="3001" />
+            <ServiceRow dotStatus={data.mcp?.enabled ? 'ok' : 'error'} name="MCP Server" statusLabel={`${toolCount} tools`} detail="SSE + REST" port="3001" />
+            <ServiceRow dotStatus="ok" name="Web App" statusLabel="Next.js" detail="" port="3009" />
+            <ServiceRow dotStatus={tunnelUrl ? 'ok' : 'error'} name="ngrok Tunnel" statusLabel={tunnelUrl ? 'Connected' : 'Not configured'} detail={tunnelUrl} />
+            <ServiceRow dotStatus="ok" name="Desktop Agent" statusLabel="Active" detail="" />
+          </div>
+        </div>
+      </div>
+
+      <div className="section-title">Connected AI Clients</div>
+      <div className="service-table">
+        {clients.length > 0 ? clients.map((cl, i) => (
+          <div className="service-row" key={i}>
+            <span className="dot dot-green" />
+            <span className="name">{cl.name}</span>
+            <span className="app-pill" style={{background: 'rgba(108,99,255,0.15)', color: 'var(--accent)'}}>{cl.transport}</span>
+            <span className="detail">{cl.callCount} calls</span>
+            <span className="detail">{cl.lastSeen}</span>
+          </div>
+        )) : (
+          <div className="service-row" style={{color: 'var(--text-dim)'}}>No active clients</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── MCP & Connectors Tab ───
+function MCPTab({ data }) {
+  const [expanded, setExpanded] = useState(null);
+  const launcher = useLauncherStatus();
+  if (!data) return <div style={{color: 'var(--text-dim)'}}>Loading...</div>;
+
+  const baseUrl = launcher?.ngrok?.url || data.config?.publicUrl || 'http://localhost:3001';
+  const endpoints = [
+    { label: 'MCP SSE', url: baseUrl + '/mcp' },
+    { label: 'REST API', url: baseUrl + '/api/mcp-rest' },
+    { label: 'OpenAPI Spec', url: baseUrl + '/api/mcp-rest/openapi.json' },
+    { label: 'Health', url: baseUrl + '/api/health' },
+  ];
+
+  // WIRE-1: Use real tool metrics from health endpoint
+  const metricsByName = {};
+  for (const m of (data.mcp?.toolMetrics || [])) {
+    metricsByName[m.name] = m;
+  }
+  const tools = (data.mcp?.toolNames || []).map((name) => {
+    const m = metricsByName[name] || {};
+    return {
+      name,
+      calls: m.calls ?? 0,
+      avgLatency: m.avgLatency ? m.avgLatency + 'ms' : '—',
+      lastCall: m.lastCalled ? new Date(m.lastCalled).toLocaleTimeString() : '—',
+      errors: m.errors ?? 0,
+      description: 'MCP tool',
+      params: [],
+    };
+  });
+
+  return (
+    <div>
+      <div className="section-title">Endpoints</div>
+      <div className="service-table" style={{marginBottom: 24}}>
+        {endpoints.map((ep, i) => (
+          <div className="endpoint-row" key={i}>
+            <span className="ep-label">{ep.label}</span>
+            <span className="ep-url">{ep.url}</span>
+            <button className="copy-btn" onClick={() => copyToClipboard(ep.url)}>Copy</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="section-title">MCP Tools ({tools.length})</div>
+      <div className="service-table">
+        {tools.map((tool, i) => (
+          <React.Fragment key={i}>
+            <div className="tool-row" onClick={() => setExpanded(expanded === i ? null : i)}>
+              <span className="dot dot-green" style={{width:6, height:6}} />
+              <span className="tool-name">{tool.name}</span>
+              <span className="tool-stat">{tool.calls} calls</span>
+              <span className="tool-stat">{tool.avgLatency}</span>
+              <span className="tool-stat">{tool.lastCall}</span>
+              {tool.errors > 0 && <span className="error-badge">{tool.errors} err</span>}
+            </div>
+            {expanded === i && (
+              <div className="tool-expanded">
+                <div style={{marginBottom: 4}}>{tool.description}</div>
+                <div style={{fontFamily: 'var(--font-mono)', fontSize: 10}}>Parameters: query, options</div>
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Pipeline Tab ───
+const SOURCE_LABELS = {
+  local: 'Local Files',
+  upload: 'Uploads',
+  gws: 'Google Workspace',
+  chat_artifact: 'Chat Artifacts',
+};
+
+function PipelineTab({ data }) {
+  const records = data?.index?.records ?? data?.index?.totalRecords ?? 0;
+  const rawFiles = data?.index?.rawFiles ?? data?.index?.rawFileCount ?? 0;
+  const edges = data?.index?.edges ?? 0;
+
+  // Pull canonical 7-stage architecture from /api/models/pipeline. Each stage
+  // carries: stageName, role (or null), produces, storage, llm flag, and
+  // usageThisMonth (call count merged from the tier(s) the stage routes through).
+  const [pipeline, setPipeline] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/models/pipeline');
+        const json = await res.json();
+        if (mounted && !json.error) setPipeline(json.data || []);
+      } catch { /* leave empty; UI shows fallback */ }
+    };
+    load();
+    const id = setInterval(load, 10000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  // Real source breakdown from /api/health (raw_files grouped by source_type)
+  const breakdown = data?.index?.sourceBreakdown ?? [];
+  const breakdownTotal = breakdown.reduce((sum, s) => sum + (s.count || 0), 0) || 0;
+  const sources = breakdown.map(s => ({
+    label: SOURCE_LABELS[s.source] || s.source,
+    count: s.count,
+    pct: breakdownTotal > 0 ? Math.round((s.count / breakdownTotal) * 100) : 0,
+  }));
+
+  // Per-stage tile color/label reflects what's actually happening:
+  //   - LLM stages: # of calls this month (green if > 0, dim if 0)
+  //   - Non-LLM stages: storage table size (raw files, records, edges)
+  //   - llm='partial' stages still show their LLM call count when > 0
+  const stageStatus = (s) => {
+    if (s.llm === 'no' || !s.role) {
+      // Map to the closest health metric for non-LLM stages
+      if (s.stageName === 'Ingest')   return { count: rawFiles, unit: 'raw files' };
+      if (s.stageName === 'Activate') return { count: 0,        unit: 'session buffer' };
+      if (s.stageName === 'Relate')   return { count: edges,    unit: 'edges' };
+      if (s.stageName === 'Attribute')return { count: edges,    unit: 'weighted' };
+      return { count: records, unit: 'records' };
+    }
+    return { count: s.usageThisMonth?.calls ?? 0, unit: 'LLM calls/mo' };
+  };
+
+  return (
+    <div>
+      <div className="section-title">Pipeline Stages</div>
+      <div className="pipeline-flow" style={{flexWrap:'wrap'}}>
+        {pipeline.length === 0 && (
+          <div style={{fontSize:11, color:'var(--text-dim)', padding:8}}>Loading pipeline…</div>
+        )}
+        {pipeline.map((s, i) => {
+          const { count, unit } = stageStatus(s);
+          const isLlm = s.llm !== 'no';
+          const ok = count > 0;
+          const color = !isLlm ? '#fff'
+                      : s.llm === 'partial' ? 'var(--amber)'
+                      : ok ? 'var(--green)' : 'var(--text-dim)';
+          const llmDot = s.llm === 'yes' ? '● '
+                       : s.llm === 'partial' ? '◐ '
+                       : '○ ';
+          return (
+            <React.Fragment key={s.stage}>
+              <div className="pipeline-stage" title={s.summary}>
+                <div style={{fontSize:9, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>
+                  {String(s.stage).padStart(2,'0')}
+                </div>
+                <div className="stage-name">{s.stageName}</div>
+                {s.role && (
+                  <div style={{fontSize:10, color:'var(--accent)', fontFamily:'var(--font-mono)', marginTop:2}}>
+                    {llmDot}{s.role} → {s.produces}
+                  </div>
+                )}
+                {!s.role && (
+                  <div style={{fontSize:10, color:'var(--text-dim)', fontFamily:'var(--font-mono)', marginTop:2}}>
+                    {llmDot}{s.produces}
+                  </div>
+                )}
+                <div className="stage-status" style={{color, marginTop:4}}>
+                  {count.toLocaleString()} {unit}
+                </div>
+                <div style={{fontSize:9, color:'var(--text-dim)', marginTop:4}}>{s.storage}</div>
+              </div>
+              {i < pipeline.length - 1 && <span className="pipeline-arrow">→</span>}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      <div className="stat-grid stat-grid-4">
+        <StatCard label="Index Records" value={records.toLocaleString()} />
+        <StatCard label="Raw Files" value={rawFiles.toLocaleString()} />
+        <StatCard label="Embeddings" value={(records * 3).toLocaleString()} sub="3 facets × records" />
+        <StatCard label="Knowledge Edges" value={edges.toLocaleString()} />
+      </div>
+
+      <div className="section-title">Source Breakdown</div>
+      <div className="stat-card" style={{padding: '16px 20px'}}>
+        {sources.length === 0 && (
+          <div style={{color: 'var(--text-dim)', fontSize: 12, padding: 8}}>
+            No raw files ingested yet.
+          </div>
+        )}
+        {sources.map(src => (
+          <div className="bar-row" key={src.label}>
+            <span className="bar-label">{src.label}</span>
+            <div className="bar-track"><div className="bar-fill" style={{width: src.pct + '%'}} /></div>
+            <span className="bar-count">{src.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Users Tab ───
+const USER_COLORS = ['#6C63FF', '#10a37f', '#22d3ee', '#f59e0b', '#ec4899', '#84cc16', '#a855f7'];
+
+function initialsFor(name, email) {
+  const src = (name || email || '?').trim();
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return src.slice(0, 2).toUpperCase();
+}
+function colorFor(id) {
+  let h = 0;
+  for (let i = 0; i < (id || '').length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return USER_COLORS[h % USER_COLORS.length];
+}
+function formatTokens(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+function formatUsd(n) {
+  return '$' + (Number(n) || 0).toFixed(2);
+}
+
+function UsersTab({ openGraph }) {
+  const { users: rawUsers, error } = useUsersStats();
+  const users = rawUsers.map(u => ({
+    ...u,
+    initials: initialsFor(u.name, u.email),
+    color: colorFor(u.id),
+  }));
+  const [selected, setSelected] = useState(null);
+  const user = selected ? users.find(u => u.id === selected) : null;
+
+  const goToGraph = (view) => {
+    if (!user || !openGraph) return;
+    openGraph({ userId: user.id, spaceId: '', workspaceId: '' }, view);
+  };
+
+  if (user) {
+    return (
+      <div>
+        <button className="back-btn" onClick={() => setSelected(null)}>← Back to users</button>
+        <div className="profile-header">
+          <div className="avatar-lg" style={{background: user.color + '22', color: user.color}}>{user.initials}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize: 18, fontWeight: 600, color: '#fff'}}>{user.name}</div>
+            <div style={{fontSize: 12, color: 'var(--text-dim)'}}>{user.email}</div>
+            <span className="dot dot-green" style={{marginTop: 4}} />
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <button className="primary-btn" onClick={() => goToGraph('summary')}
+                    title="Open the Graph tab filtered to this user">
+              View graph →
+            </button>
+            <button className="ghost-btn" onClick={() => goToGraph('nodes')}>
+              {user.recordCount.toLocaleString()} nodes →
+            </button>
+            <button className="ghost-btn" onClick={() => goToGraph('edges')}>
+              Edges →
+            </button>
+          </div>
+        </div>
+        <div className="stat-grid stat-grid-4">
+          <StatCard label="Index Records" value={user.recordCount.toLocaleString()} />
+          <StatCard label="Files" value={user.fileCount.toLocaleString()} />
+          <StatCard label="Total Cost" value={formatUsd(user.costTotal)} />
+          <StatCard label="Tokens" value={formatTokens(user.tokensTotal)} />
+        </div>
+        {user.createdAt && (
+          <div style={{fontSize: 11, color: 'var(--text-dim)', marginTop: 8}}>
+            Joined {new Date(user.createdAt).toLocaleDateString()}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && (
+        <div style={{color: 'var(--red)', fontSize: 12, padding: 8}}>
+          Failed to load users — API unreachable.
+        </div>
+      )}
+      {!error && users.length === 0 && (
+        <div style={{color: 'var(--text-dim)', fontSize: 12, padding: 8}}>
+          No users yet.
+        </div>
+      )}
+      {users.length > 0 && (
+      <div className="service-table">
+        <table className="users-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Files</th>
+              <th>Records</th>
+              <th>Tokens</th>
+              <th>Cost (all)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} onClick={() => setSelected(u.id)}>
+                <td>
+                  <div className="user-cell">
+                    <div className="avatar" style={{background: u.color + '22', color: u.color}}>{u.initials}</div>
+                    <div>
+                      <div style={{fontWeight: 500}}>{u.name || '(no name)'}</div>
+                      <div style={{fontSize: 10, color: 'var(--text-dim)'}}>{u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{fontFamily: 'var(--font-mono)'}}>{u.fileCount.toLocaleString()}</td>
+                <td style={{fontFamily: 'var(--font-mono)'}}>{u.recordCount.toLocaleString()}</td>
+                <td style={{fontFamily: 'var(--font-mono)'}}>{formatTokens(u.tokensTotal)}</td>
+                <td style={{fontFamily: 'var(--font-mono)'}}>{formatUsd(u.costTotal)}</td>
+                <td style={{textAlign:'right'}}>
+                  <button className="ghost-btn"
+                          onClick={(e) => { e.stopPropagation();
+                                            openGraph && openGraph({userId: u.id, spaceId:'', workspaceId:''}, 'nodes'); }}>
+                    Graph →
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      )}
+    </div>
+  );
+}
+
+// ─── System Tab ───
+function SystemTab({ data }) {
+  // Real costs from /api/health (WIRE-1)
+  const costsToday = data?.costs?.today ?? 0;
+  const costsMonth = data?.costs?.thisMonth ?? 0;
+  const byModel = data?.costs?.byModel ?? [];
+
+  // Monthly projection: today's cost × days-in-month, scaled by hours elapsed today
+  const now = new Date();
+  const hoursElapsedToday = now.getHours() + now.getMinutes() / 60 || 1;
+  const projection = hoursElapsedToday > 0
+    ? (costsToday / hoursElapsedToday) * 24 * 30
+    : 0;
+
+  // Compute max cost for bar scaling
+  const maxCost = byModel.reduce((m, row) => Math.max(m, row.cost || 0), 0) || 1;
+  const formatUsd = (n) => '$' + (Number(n) || 0).toFixed(2);
+
+  const resources = [
+    { name: 'PostgreSQL', status: data?.checks?.postgres?.status || 'ok', cpu: 12, mem: 34, extra: 'connections: 8' },
+    { name: 'Redis', status: data?.checks?.redis?.status || 'ok', cpu: 3, mem: 15, extra: 'keys: 142' },
+    { name: 'ClickHouse', status: data?.checks?.clickhouse?.status || 'fallback', cpu: 8, mem: 28, extra: 'queries/hr: 45' },
+    { name: 'MinIO', status: data?.checks?.s3?.status || 'ok', cpu: 5, mem: 20, extra: 'objects: 89' },
+  ];
+
+  return (
+    <div>
+      <div className="stat-grid stat-grid-4">
+        <StatCard label="Today's Cost" value={formatUsd(costsToday)} sub={byModel.length + ' models'} />
+        <StatCard label="Monthly Projection" value={formatUsd(projection)} sub="Based on today's rate" />
+        <StatCard label="This Month" value={formatUsd(costsMonth)} sub="Actual so far" />
+        <StatCard label="Total Calls" value={byModel.reduce((s, m) => s + (m.calls || 0), 0)} />
+      </div>
+
+      <div className="section-title">LLM Cost by Model</div>
+      <div className="stat-card" style={{padding: '16px 20px', marginBottom: 24}} data-testid="cost-by-model">
+        {byModel.length === 0 ? (
+          <div style={{color: 'var(--text-dim)', fontSize: 11, padding: '8px 0'}}>No LLM usage recorded yet</div>
+        ) : byModel.map(m => (
+          <div className="bar-row" key={m.model}>
+            <span className="bar-label cost-bar-label" style={{width: 170}}>{m.model}</span>
+            <div className="bar-track"><div className="bar-fill" style={{width: ((m.cost / maxCost) * 100) + '%'}} /></div>
+            <span className="bar-count">{formatUsd(m.cost)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="section-title">Infrastructure Resources</div>
+      <div className="stat-grid stat-grid-4">
+        {resources.map(r => (
+          <div className="resource-card" key={r.name}>
+            <div className="res-header">
+              <span className={dotClass(r.status)} />
+              <span className="res-name">{r.name}</span>
+            </div>
+            <div className="res-bar-row">
+              <span className="res-bar-label">CPU</span>
+              <div className="res-bar-track"><div className="res-bar-fill" style={{width: r.cpu+'%', background: 'var(--accent)'}} /></div>
+              <span className="res-bar-value">{r.cpu}%</span>
+            </div>
+            <div className="res-bar-row">
+              <span className="res-bar-label">Mem</span>
+              <div className="res-bar-track"><div className="res-bar-fill" style={{width: r.mem+'%', background: 'var(--cyan)'}} /></div>
+              <span className="res-bar-value">{r.mem}%</span>
+            </div>
+            <div style={{fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', marginTop: 6}}>{r.extra}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Traffic Tab ───
+function TrafficTab() {
+  const [requests, setRequests] = useState([]);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const ws = new WebSocket('ws://localhost:4000/ws');
+      wsRef.current = ws;
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'traffic') {
+            setRequests(prev => [msg, ...prev].slice(0, 100));
+          }
+        } catch {}
+      };
+      ws.onerror = () => {};
+      ws.onclose = () => {};
+      return () => ws.close();
+    } catch {}
+  }, []);
+
+  const methodColor = (m) => m === 'POST' ? 'var(--cyan)' : m === 'GET' ? 'var(--green)' : 'var(--text)';
+  const statusColor = (s) => s < 300 ? 'var(--green)' : 'var(--red)';
+  const latencyColor = (ms) => ms > 500 ? 'var(--amber)' : 'var(--text-dim)';
+
+  return (
+    <div>
+      <div className="section-title">Live API Traffic</div>
+      <div className="service-table">
+        <table className="traffic-table">
+          <thead>
+            <tr><th>Time</th><th>Method</th><th>Path</th><th>Tool</th><th>Status</th><th>Latency</th><th>Client</th></tr>
+          </thead>
+          <tbody>
+            {requests.length === 0 ? (
+              <tr><td colSpan="7" style={{color: 'var(--text-dim)', textAlign: 'center', padding: 24}}>Waiting for requests... (WebSocket on ws://localhost:4000/ws)</td></tr>
+            ) : requests.map((r, i) => (
+              <tr key={i}>
+                <td>{r.time}</td>
+                <td style={{color: methodColor(r.method)}}>{r.method}</td>
+                <td>{r.path}</td>
+                <td style={{color: 'var(--accent)'}}>{r.tool || '—'}</td>
+                <td style={{color: statusColor(r.status)}}>{r.status}</td>
+                <td style={{color: latencyColor(r.ms)}}>{r.ms}ms</td>
+                <td>{r.client || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Logs Tab ───
+function LogsTab() {
+  const [activeSource, setActiveSource] = useState('api');
+  const [logs, setLogs] = useState({ api: [], agent: [], ngrok: [] });
+  const viewerRef = useRef(null);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const ws = new WebSocket('ws://localhost:4000/ws');
+      wsRef.current = ws;
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'log') {
+            setLogs(prev => ({
+              ...prev,
+              [msg.source]: [...(prev[msg.source] || []), msg.line].slice(-500),
+            }));
+          }
+        } catch {}
+      };
+      return () => ws.close();
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (viewerRef.current) {
+      const el = viewerRef.current;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+      if (atBottom) el.scrollTop = el.scrollHeight;
+    }
+  }, [logs, activeSource]);
+
+  const lineClass = (line) => {
+    if (/error|ERR|500|404|fail/i.test(line)) return 'log-line-error';
+    if (/warn|WARN/i.test(line)) return 'log-line-warn';
+    if (/200|201|✓|success/i.test(line)) return 'log-line-success';
+    return '';
+  };
+
+  const currentLogs = logs[activeSource] || [];
+
+  return (
+    <div>
+      <div className="sub-tabs">
+        {['api', 'agent', 'ngrok'].map(s => (
+          <button key={s} className={'sub-tab' + (activeSource === s ? ' active' : '')} onClick={() => setActiveSource(s)}>
+            {s === 'api' ? 'API Server' : s === 'agent' ? 'Desktop Agent' : 'ngrok'}
+          </button>
+        ))}
+      </div>
+      <div className="log-viewer" ref={viewerRef}>
+        {currentLogs.length === 0 ? (
+          <div style={{padding: 12}}>Waiting for log data... (WebSocket on ws://localhost:4000/ws)</div>
+        ) : currentLogs.map((line, i) => (
+          <div key={i} className={lineClass(line)}>{line}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard token (injected by launcher into the HTML) ───
+function getDashboardToken() {
+  const el = document.querySelector('meta[name="dashboard-token"]');
+  return (el && el.getAttribute('content')) || '';
+}
+function authedFetch(url, init) {
+  const opts = init || {};
+  const headers = Object.assign({}, opts.headers || {}, { 'X-Dashboard-Token': getDashboardToken() });
+  return fetch(url, Object.assign({}, opts, { headers }));
+}
+
+// ─── Format helpers for new tabs ───
+function formatEta(ms) {
+  if (ms == null) return '—';
+  if (ms < 1000) return '<1s';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  if (m < 60) return m + 'm ' + rs + 's';
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return h + 'h ' + rm + 'm';
+}
+function formatCost(n) { return '$' + (Number(n) || 0).toFixed(4); }
+function formatCostShort(n) {
+  const v = Number(n) || 0;
+  if (v >= 1) return '$' + v.toFixed(2);
+  if (v >= 0.01) return '$' + v.toFixed(3);
+  return '$' + v.toFixed(5);
+}
+
+// ─── Pipeline LLM Roles section (renders inside ModelsTab) ───
+function PipelineRolesSection({ openPrompts, togglePrompt }) {
+  const [stages, setStages] = useState([]);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/models/pipeline');
+      // Read as text first so that on parse failure we can show the actual
+      // body (a 404 page, an HTML error, or whatever the API is returning).
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        const head = text.slice(0, 240).replace(/\s+/g, ' ').trim();
+        throw new Error(
+          'Pipeline endpoint returned non-JSON (status ' + res.status + '). ' +
+          'Body starts with: ' + (head || '(empty)') +
+          ' — most likely the API needs to be restarted to pick up /api/models/pipeline.'
+        );
+      }
+      if (json.error) { setError(json.error.message); return; }
+      setStages(json.data || []);
+      setError(null);
+    } catch (e) { setError(e.message); }
+  }, []);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 10000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  // Only the 5 LLM roles get prominent treatment. Non-LLM stages get a
+  // compact strip below so the operator can still see the full pipeline.
+  const llmStages = stages.filter(s => s.role && s.llm !== 'no');
+  const nonLlmStages = stages.filter(s => !s.role || s.llm === 'no');
+
+  const llmBadge = (llm) => {
+    if (llm === 'yes') return <span style={{fontSize:9, color:'var(--green)', fontFamily:'var(--font-mono)'}}>● LLM</span>;
+    if (llm === 'partial') return <span style={{fontSize:9, color:'var(--amber)', fontFamily:'var(--font-mono)'}}>◐ PARTIAL</span>;
+    return <span style={{fontSize:9, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>○ NO LLM</span>;
+  };
+
+  return (
+    <div style={{marginBottom: 28}}>
+      <div className="section-title" style={{marginBottom: 8}}>
+        Pipeline LLM Roles ({llmStages.length})
+      </div>
+      <div style={{fontSize:11, color:'var(--text-dim)', marginBottom:12}}>
+        The cognitive pipeline runs 7 stages. Stages 1–2 are passive buffers.
+        Stages 3–7 each have a named LLM role: <span style={{color:'var(--accent)'}}>Reporter → Analyst → Editor → Archivist → Profiler</span>.
+      </div>
+      {error && <div className="error-banner"><span className="dot dot-red" /> {error}</div>}
+
+      {llmStages.map((s) => {
+        const open = !!openPrompts['ROLE:' + s.role];
+        const accent = s.llm === 'yes' ? 'var(--green)' : 'var(--amber)';
+        return (
+          <div key={s.role} className="stat-card" style={{padding: 0, marginBottom: 10, overflow:'hidden'}}>
+            <div style={{display:'flex', alignItems:'center', gap:14, padding:'14px 16px', cursor:'pointer'}}
+                 onClick={() => togglePrompt('ROLE:' + s.role)}>
+              <div style={{fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-dim)', width:24}}>
+                {String(s.stage).padStart(2, '0')}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{display:'flex', alignItems:'baseline', gap:10}}>
+                  <span style={{fontSize:14, fontWeight:600, color:'#fff'}}>{s.role}</span>
+                  <span style={{fontSize:11, color:'var(--text-dim)'}}>· {s.stageName} → {s.produces}</span>
+                  {llmBadge(s.llm)}
+                </div>
+                <div style={{fontSize:11, color:'var(--text-dim)', marginTop:4, maxWidth:680}}>{s.summary}</div>
+                <div style={{fontSize:10, color:'var(--text-dim)', marginTop:4, fontFamily:'var(--font-mono)'}}>
+                  storage: {s.storage}
+                  {s.tiers.length > 0 && <> · tier: {s.tiers.join(', ')}</>}
+                  {s.prompts.length > 0 && <> · {s.prompts.length} prompt{s.prompts.length === 1 ? '' : 's'}</>}
+                </div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:14, fontWeight:600, color: s.usageThisMonth.calls > 0 ? 'var(--green)' : 'var(--text-dim)'}}>
+                  {s.usageThisMonth.calls.toLocaleString()}
+                </div>
+                <div style={{fontSize:9, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>calls / mo</div>
+              </div>
+              <div style={{fontSize:14, color:'var(--text-dim)', marginLeft:8, width:14}}>
+                {open ? '▾' : '▸'}
+              </div>
+            </div>
+            {open && (
+              <div style={{padding:'4px 16px 16px 54px', borderTop:'1px solid var(--border)', borderLeft:'2px solid ' + accent}}>
+                {s.prompts.length === 0 && (
+                  <div style={{fontSize:11, color:'var(--text-dim)', padding:'12px 0'}}>
+                    No prompt registered for this role yet — the stage runs deterministically (see implementations below).
+                  </div>
+                )}
+                {s.prompts.map((p, i) => (
+                  <div key={i} style={{marginTop:12}}>
+                    <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom:6}}>
+                      <span style={{fontSize:11, fontWeight:600, color:'#fff'}}>{p.label}</span>
+                      <span style={{fontSize:10, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>{p.source}</span>
+                      <span style={{fontSize:9, color:'var(--accent)', fontFamily:'var(--font-mono)'}}>tier: {p.tier}</span>
+                    </div>
+                    <pre style={{
+                      margin:0, padding:'10px 12px', background:'var(--bg)', border:'1px solid var(--border)',
+                      borderRadius:4, fontSize:10, fontFamily:'var(--font-mono)', color:'var(--text)',
+                      whiteSpace:'pre-wrap', wordBreak:'break-word', maxHeight:400, overflow:'auto'
+                    }}>{p.prompt}</pre>
+                  </div>
+                ))}
+                {s.implementations.length > 0 && (
+                  <div style={{marginTop:14, paddingTop:10, borderTop:'1px dashed var(--border)'}}>
+                    <div style={{fontSize:10, color:'var(--text-dim)', marginBottom:4}}>Implemented by:</div>
+                    {s.implementations.map((f, i) => (
+                      <div key={i} style={{fontSize:10, color:'var(--text-dim)', fontFamily:'var(--font-mono)', paddingLeft:8}}>
+                        · {f}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {nonLlmStages.length > 0 && (
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:10, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:1.2, marginBottom:6}}>
+            Non-LLM stages
+          </div>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+            {nonLlmStages.map(s => (
+              <div key={s.stage} className="stat-card" style={{padding:'10px 14px', flex:'1 1 220px', minWidth:0}}>
+                <div style={{fontSize:9, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>
+                  {String(s.stage).padStart(2,'0')} · {s.stageName}
+                </div>
+                <div style={{fontSize:12, fontWeight:600, color:'#fff', marginTop:2}}>{s.produces}</div>
+                <div style={{fontSize:10, color:'var(--text-dim)', marginTop:4, fontFamily:'var(--font-mono)'}}>{s.storage}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Models Tab ───
+function ModelsTab() {
+  const [tiers, setTiers] = useState([]);
+  const [catalogue, setCatalogue] = useState([]);
+  const [draft, setDraft] = useState({}); // tier → candidate model id
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [search, setSearch] = useState('');
+  const [onlyFree, setOnlyFree] = useState(false);
+  const [showIdle, setShowIdle] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [showTierView, setShowTierView] = useState(false);
+  // tier → boolean: is its system-prompt panel expanded?
+  const [openPrompts, setOpenPrompts] = useState({});
+  const togglePrompt = (key) => setOpenPrompts(p => Object.assign({}, p, { [key]: !p[key] }));
+
+  const loadTiers = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/models');
+      const json = await res.json();
+      setTiers(json.data || []);
+    } catch { setStatus({ err: 'Failed to load tiers' }); }
+  }, []);
+
+  useEffect(() => {
+    loadTiers();
+    const id = setInterval(loadTiers, 10000);
+    return () => clearInterval(id);
+  }, [loadTiers]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const params = new URLSearchParams();
+        if (onlyFree) params.set('free', '1');
+        const res = await fetch('http://localhost:3001/api/openrouter/models?' + params.toString());
+        const json = await res.json();
+        setCatalogue(json.data || []);
+      } catch {
+        setCatalogue([]);
+      }
+    })();
+  }, [onlyFree]);
+
+  const dirty = Object.keys(draft).length > 0;
+
+  const filteredCatalogue = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return catalogue;
+    return catalogue.filter(m => m.id.toLowerCase().includes(q) || (m.name||'').toLowerCase().includes(q));
+  }, [catalogue, search]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      // Merge draft with current overrides — keep explicit overrides that aren't being changed
+      const current = {};
+      for (const t of tiers) if (t.isOverridden) current[t.tier] = t.currentModel;
+      const next = Object.assign({}, current, draft);
+      const res = await authedFetch('http://localhost:3001/api/models/overrides', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      setStatus({ ok: 'Saved ' + Object.keys(next).length + ' override(s)' });
+      setDraft({});
+      await loadTiers();
+    } catch (e) {
+      setStatus({ err: 'Save failed: ' + e.message });
+    } finally { setSaving(false); }
+  };
+
+  const resetTier = async (tier) => {
+    setSaving(true);
+    try {
+      await authedFetch('http://localhost:3001/api/models/reset/' + tier, { method: 'POST' });
+      setDraft(d => { const n = Object.assign({}, d); delete n[tier]; return n; });
+      await loadTiers();
+    } finally { setSaving(false); }
+  };
+
+  const resetAll = async () => {
+    if (!confirm('Reset all tier overrides to defaults?')) return;
+    setSaving(true);
+    try {
+      await authedFetch('http://localhost:3001/api/models/reset-all', { method: 'POST' });
+      setDraft({});
+      await loadTiers();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      {/* The 5 LLM roles that drive the indexing pipeline — front and center */}
+      <PipelineRolesSection openPrompts={openPrompts} togglePrompt={togglePrompt} />
+
+      <div style={{marginTop: 24, marginBottom: 8}}>
+        <button className="ghost-btn" onClick={() => setShowTierView(v => !v)}
+          style={{width: '100%', textAlign: 'left', padding: '8px 12px'}}>
+          {showTierView ? '▾' : '▸'} Tier-level model assignments — advanced (per-call-site model overrides)
+        </button>
+      </div>
+
+      {showTierView && (
+      <div>
+      <div className="section-title">Model catalogue filter</div>
+      <div style={{display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center'}}>
+        <input type="text" placeholder="Search models (e.g. 'claude', 'haiku', 'deepseek')"
+          value={search} onChange={e => setSearch(e.target.value)}
+          style={{flex: 1, padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
+                  color: 'var(--text)', borderRadius: 4, fontSize: 12, fontFamily: 'var(--font-mono)'}} />
+        <label style={{fontSize: 11, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 6}}>
+          <input type="checkbox" checked={onlyFree} onChange={e => setOnlyFree(e.target.checked)} />
+          Free only
+        </label>
+        <span className="job-meta">{filteredCatalogue.length} / {catalogue.length} models</span>
+      </div>
+
+      {dirty && (
+        <div className="save-bar">
+          <span style={{flex: 1}}>{Object.keys(draft).length} unsaved change(s)</span>
+          <button className="ghost-btn" onClick={() => setDraft({})}>Discard</button>
+          <button className="primary-btn" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save overrides'}
+          </button>
+        </div>
+      )}
+      {status?.ok && <div style={{color: 'var(--green)', fontSize: 11, marginBottom: 12, fontFamily: 'var(--font-mono)'}}>{status.ok}</div>}
+      {status?.err && <div className="error-banner"><span className="dot dot-red" /> {status.err}</div>}
+
+      {(() => {
+        // Bucket tiers by what's actually happening, not by config flags:
+        //   - usedTiers      → calls > 0 this month (the only ones doing work)
+        //   - idleActive     → wired into live code paths but never called yet
+        //   - inactiveTiers  → kept around for back-compat, no live caller
+        const usedTiers = tiers.filter(t => (t.usageThisMonth?.calls ?? 0) > 0);
+        const idleActive = tiers.filter(t => t.active && (t.usageThisMonth?.calls ?? 0) === 0);
+        const inactiveTiers = tiers.filter(t => !t.active);
+
+        const renderRow = (t) => {
+          const current = draft[t.tier] !== undefined ? draft[t.tier] : t.currentModel;
+          const isDirty = draft[t.tier] !== undefined && draft[t.tier] !== t.currentModel;
+          const variants = t.promptVariants || [];
+          const hasPrompt = variants.length > 0;
+          const open = !!openPrompts[t.tier];
+          return (
+            <React.Fragment key={t.tier}>
+              <div className="tier-row">
+                <div>
+                  <div className="tier-name" style={{cursor: hasPrompt ? 'pointer' : 'default'}}
+                       onClick={() => hasPrompt && togglePrompt(t.tier)}
+                       title={hasPrompt ? 'Click to view system prompt' : ''}>
+                    {hasPrompt ? (open ? '▾ ' : '▸ ') : ''}
+                    {t.tier}
+                  </div>
+                  <div className="tier-default">default: {t.defaultModel}</div>
+                  {t.promptPurpose && (
+                    <div style={{fontSize: 10, color: 'var(--text-dim)', marginTop: 2, maxWidth: 280}}>
+                      {t.promptPurpose}
+                    </div>
+                  )}
+                </div>
+                <select className="tier-selector" value={current}
+                  onChange={e => setDraft(d => Object.assign({}, d, { [t.tier]: e.target.value }))}>
+                  {filteredCatalogue.find(m => m.id === current) ? null : (
+                    <option value={current}>{current} (current)</option>
+                  )}
+                  {filteredCatalogue.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.id}
+                      {m.pricing.prompt === 0 && m.pricing.completion === 0 ? ' — free'
+                        : ' — $' + m.pricing.prompt.toFixed(3) + '/$' + m.pricing.completion.toFixed(3) + ' per 1M'}
+                    </option>
+                  ))}
+                </select>
+                <div className="tier-usage">
+                  <div style={{color: (t.usageThisMonth?.calls ?? 0) > 0 ? 'var(--green)' : 'var(--text-dim)'}}>
+                    {t.usageThisMonth.calls} calls
+                  </div>
+                  <div>{formatCostShort(t.usageThisMonth.cost)}</div>
+                </div>
+                <div>
+                  {(t.isOverridden || isDirty) && <span className="overridden-pill">OVERRIDE</span>}
+                  {isDirty && <span className="overridden-pill" style={{marginLeft: 4, background: 'rgba(251,191,36,0.15)', color: 'var(--amber)'}}>DIRTY</span>}
+                </div>
+                <div style={{textAlign: 'right', display:'flex', gap:6, justifyContent:'flex-end'}}>
+                  {hasPrompt && (
+                    <button className="ghost-btn" onClick={() => togglePrompt(t.tier)}>
+                      {open ? 'Hide prompt' : 'Show prompt'}
+                    </button>
+                  )}
+                  {t.isOverridden && (
+                    <button className="ghost-btn" onClick={() => resetTier(t.tier)} disabled={saving}>Reset</button>
+                  )}
+                </div>
+              </div>
+              {open && hasPrompt && (
+                <div style={{padding:'12px 16px 16px 32px', background:'rgba(108,99,255,0.04)', borderLeft:'2px solid var(--accent)'}}>
+                  {variants.map((v, i) => (
+                    <div key={i} style={{marginBottom: i < variants.length - 1 ? 16 : 0}}>
+                      <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom:6}}>
+                        <span style={{fontSize:11, fontWeight:600, color:'#fff'}}>{v.label}</span>
+                        <span style={{fontSize:10, color:'var(--text-dim)', fontFamily:'var(--font-mono)'}}>{v.source}</span>
+                      </div>
+                      <pre style={{
+                        margin:0, padding:'10px 12px', background:'var(--bg)', border:'1px solid var(--border)',
+                        borderRadius:4, fontSize:10, fontFamily:'var(--font-mono)', color:'var(--text)',
+                        whiteSpace:'pre-wrap', wordBreak:'break-word', maxHeight:400, overflow:'auto'
+                      }}>{v.prompt}</pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </React.Fragment>
+          );
+        };
+
+        return (
+          <>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+              <div className="section-title" style={{marginBottom: 0}}>
+                In use this month ({usedTiers.length})
+              </div>
+              <button className="ghost-btn" onClick={resetAll} disabled={saving}>Reset all to defaults</button>
+            </div>
+            {usedTiers.length === 0 ? (
+              <div className="stat-card" style={{padding:'14px 16px', color:'var(--text-dim)', fontSize:12, marginBottom:12}}>
+                No tier has been called yet this month. As soon as the app makes its first LLM call, the tier will appear here with its prompt.
+              </div>
+            ) : (
+              <div className="service-table">{usedTiers.map(renderRow)}</div>
+            )}
+
+            <div style={{marginTop: 20, marginBottom: 8}}>
+              <button className="ghost-btn" onClick={() => setShowIdle(v => !v)}
+                style={{width: '100%', textAlign: 'left', padding: '8px 12px'}}>
+                {showIdle ? '▾' : '▸'} Wired but idle ({idleActive.length}) — live code path, no call this month
+              </button>
+            </div>
+            {showIdle && <div className="service-table">{idleActive.map(renderRow)}</div>}
+
+            <div style={{marginTop: 16, marginBottom: 8}}>
+              <button className="ghost-btn" onClick={() => setShowInactive(v => !v)}
+                style={{width: '100%', textAlign: 'left', padding: '8px 12px'}}>
+                {showInactive ? '▾' : '▸'} Unused tiers ({inactiveTiers.length}) — dormant config, no live caller
+              </button>
+            </div>
+            {showInactive && <div className="service-table">{inactiveTiers.map(renderRow)}</div>}
+          </>
+        );
+      })()}
+      </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Usage Tab ───
+function useUsageData(intervalMs) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/openrouter/usage');
+        const json = await res.json();
+        if (mounted) { setData(json.data); setError(false); }
+      } catch { if (mounted) setError(true); }
+    };
+    poll();
+    const id = setInterval(poll, intervalMs || 5000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [intervalMs]);
+  return { data, error };
+}
+
+function Sparkline({ series }) {
+  if (!series || series.length === 0) {
+    return <div style={{fontSize: 11, color: 'var(--text-dim)'}}>No activity in last 24h</div>;
+  }
+  const max = Math.max(...series.map(s => s.cost), 0.00001);
+  return (
+    <div className="sparkline">
+      {series.map((s, i) => (
+        <div key={i} className="spark-bar" title={s.hour + ': ' + formatCost(s.cost)}
+             style={{height: Math.max((s.cost / max) * 100, 2) + '%'}} />
+      ))}
+    </div>
+  );
+}
+
+function UsageTab() {
+  const { data, error } = useUsageData(5000);
+  if (error) return <div className="error-banner"><span className="dot dot-red" /> Failed to load usage data from API.</div>;
+  if (!data) return <div style={{color: 'var(--text-dim)'}}>Loading usage data...</div>;
+
+  const credits = data.credits;
+  const local = data.local || {};
+  const maxTier = (local.byTier || []).reduce((m, r) => Math.max(m, r.cost || 0), 0) || 1;
+  const maxModel = (local.byModel || []).reduce((m, r) => Math.max(m, r.cost || 0), 0) || 1;
+  const maxSource = (local.bySource || []).reduce((m, r) => Math.max(m, r.cost || 0), 0) || 1;
+
+  return (
+    <div>
+      {credits ? (
+        <div className="credit-hero">
+          <div className="hero-label">OpenRouter balance (live, cached 60s)</div>
+          <div style={{display: 'flex', gap: 40, alignItems: 'baseline'}}>
+            <div>
+              <div className="hero-value">{formatCost(credits.remaining)}</div>
+              <div className="hero-sub">remaining</div>
+            </div>
+            <div>
+              <div className="hero-value" style={{fontSize: 20, color: 'var(--text-dim)'}}>{formatCost(credits.usage)}</div>
+              <div className="hero-sub">used of {formatCost(credits.total)} total</div>
+            </div>
+            <div style={{marginLeft: 'auto', fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)'}}>
+              fetched {new Date(credits.fetchedAt).toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="error-banner">
+          <span className="dot dot-amber" /> OpenRouter credits unavailable — check OPENROUTER_API_KEY.
+        </div>
+      )}
+
+      <div className="stat-grid stat-grid-4">
+        <StatCard label="Local cost today" value={formatCost(local.today)} />
+        <StatCard label="Local cost this month" value={formatCost(local.thisMonth)} />
+        <StatCard label="Calls this month" value={(local.byModel||[]).reduce((s,m) => s + (m.calls||0), 0).toLocaleString()} />
+        <StatCard label="Tokens this month" value={formatTokens((local.byModel||[]).reduce((s,m) => s + (m.tokens||0), 0))} />
+      </div>
+
+      <div className="section-title">Last 24h — hourly cost</div>
+      <div className="stat-card" style={{padding: '12px 16px', marginBottom: 24}}>
+        <Sparkline series={local.hourly || []} />
+      </div>
+
+      <div className="stat-grid stat-grid-2">
+        <div>
+          <div className="section-title">By tier (month)</div>
+          <div className="stat-card" style={{padding: '12px 16px'}}>
+            {(local.byTier || []).length === 0 ? (
+              <div style={{color: 'var(--text-dim)', fontSize: 11}}>No usage recorded yet</div>
+            ) : local.byTier.map(r => (
+              <div className="bar-row" key={r.tier}>
+                <span className="bar-label" style={{width: 140}}>{r.tier}</span>
+                <div className="bar-track"><div className="bar-fill" style={{width: ((r.cost / maxTier) * 100) + '%'}} /></div>
+                <span className="bar-count">{formatCostShort(r.cost)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="section-title">By source (month)</div>
+          <div className="stat-card" style={{padding: '12px 16px'}}>
+            {(local.bySource || []).length === 0 ? (
+              <div style={{color: 'var(--text-dim)', fontSize: 11}}>No usage recorded yet</div>
+            ) : local.bySource.map(r => (
+              <div className="bar-row" key={r.source}>
+                <span className="bar-label" style={{width: 140}}>{r.source}</span>
+                <div className="bar-track"><div className="bar-fill" style={{width: ((r.cost / maxSource) * 100) + '%', background: 'var(--cyan)'}} /></div>
+                <span className="bar-count">{formatCostShort(r.cost)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="section-title" style={{marginTop: 24}}>By model (month)</div>
+      <div className="stat-card" style={{padding: '12px 16px', marginBottom: 24}}>
+        {(local.byModel || []).length === 0 ? (
+          <div style={{color: 'var(--text-dim)', fontSize: 11}}>No usage recorded yet</div>
+        ) : local.byModel.map(r => (
+          <div className="bar-row" key={r.model}>
+            <span className="bar-label" style={{width: 220}}>{r.model}</span>
+            <div className="bar-track"><div className="bar-fill" style={{width: ((r.cost / maxModel) * 100) + '%'}} /></div>
+            <span className="bar-count">{formatCostShort(r.cost)} · {r.calls}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="section-title">Recent LLM calls</div>
+      <div className="stat-card" style={{padding: 0}}>
+        <div className="recent-row" style={{fontWeight: 500, color: 'var(--text)'}}>
+          <span>Time</span><span>Model</span><span>Tier</span><span>Source</span><span>Tokens</span><span>Cost</span>
+        </div>
+        {(local.recent || []).length === 0 ? (
+          <div style={{padding: 12, color: 'var(--text-dim)', fontSize: 11}}>No calls recorded yet</div>
+        ) : local.recent.map(r => (
+          <div className="recent-row" key={r.id}>
+            <span>{new Date(r.createdAt).toLocaleTimeString()}</span>
+            <span>{r.model}</span>
+            <span>{r.modelTier}</span>
+            <span style={{color: 'var(--accent)'}}>{r.source}</span>
+            <span>{formatTokens(r.inputTokens + r.outputTokens)}</span>
+            <span>{formatCostShort(r.costUsd)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Index Tab ───
+//
+// The Index tab has three views:
+//   - 'queue'       : flat job list + global controls (legacy view)
+//   - 'sources'     : per-folder aggregate rows + per-folder controls
+//   - 'folder:<p>'  : per-file drill-down inside a specific folder
+//
+// View switching is in-page via React state so back/forward still feel
+// responsive and the polling cadence doesn't restart on every navigation.
+
+function useIndexJobs(activeTab, enabled) {
+  const [jobs, setJobs] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'Index' || !enabled) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const [jr, sr] = await Promise.all([
+          fetch('http://localhost:3001/api/index-queue/jobs'),
+          fetch('http://localhost:3001/api/index-queue/stats'),
+        ]);
+        const jd = await jr.json();
+        const sd = await sr.json();
+        if (mounted) {
+          setJobs(jd.data || []);
+          setStats(sd.data || null);
+          setError(false);
+        }
+      } catch { if (mounted) setError(true); }
+    };
+    poll();
+    const id = setInterval(poll, 1000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [activeTab, enabled]);
+  return { jobs, stats, error };
+}
+
+function useSources(activeTab, enabled) {
+  const [sources, setSources] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'Index' || !enabled) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const [sr, st] = await Promise.all([
+          fetch('http://localhost:3001/api/index-queue/sources'),
+          fetch('http://localhost:3001/api/index-queue/stats'),
+        ]);
+        const sd = await sr.json();
+        const td = await st.json();
+        if (mounted) {
+          setSources(sd.data || []);
+          setStats(td.data || null);
+          setError(false);
+        }
+      } catch { if (mounted) setError(true); }
+    };
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => { mounted = false; clearInterval(id); };
+  }, [activeTab, enabled]);
+  return { sources, stats, error };
+}
+
+function useFolderJobs(activeTab, folderPath) {
+  const [jobs, setJobs] = useState([]);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'Index' || !folderPath) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          'http://localhost:3001/api/index-queue/folder/jobs?folderPath=' + encodeURIComponent(folderPath)
+        );
+        const body = await res.json();
+        if (mounted) { setJobs(body.data || []); setError(false); }
+      } catch { if (mounted) setError(true); }
+    };
+    poll();
+    const id = setInterval(poll, 1000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [activeTab, folderPath]);
+  return { jobs, error };
+}
+
+function JobCard({ job, onCancel, onOpen }) {
+  const p = job.progress || {};
+  const pct = p.chunksTotal > 0 ? Math.round((p.chunksDone / p.chunksTotal) * 100) : (p.phase === 'done' ? 100 : 0);
+  const fillClass = p.phase === 'done' ? 'done' : p.phase === 'error' ? 'error' : p.phase === 'cancelled' ? 'cancelled' : '';
+  const isTerminal = ['completed', 'failed', 'cancelled'].includes(job.status);
+  const label = job.label || job.sourceId;
+  return (
+    <div className="job-card">
+      <div className="job-header">
+        <span className={dotClass(job.status === 'completed' ? 'ok' : job.status === 'failed' ? 'error' : job.status === 'cancelled' ? 'fallback' : 'ok')} />
+        {onOpen ? (
+          <span className="job-label" style={{cursor: 'pointer', textDecoration: 'underline dotted'}} onClick={() => onOpen(job)}>{label}</span>
+        ) : (
+          <span className="job-label">{label}</span>
+        )}
+        <span className={'phase-pill ' + p.phase}>{p.phase || job.status}</span>
+        {!isTerminal && (
+          <button className="ghost-btn" onClick={() => onCancel(job.id)}>Cancel</button>
+        )}
+      </div>
+      <div className="job-progress-track">
+        <div className={'job-progress-fill ' + fillClass} style={{width: Math.max(pct, 2) + '%'}} />
+      </div>
+      <div className="job-phase-row">
+        <span>{job.type} · attempts {job.attempts}</span>
+        <span>
+          {p.chunksDone || 0}/{p.chunksTotal || '?'} chunks
+          {p.msPerChunk > 0 && ' · ' + Math.round(p.msPerChunk) + 'ms/chunk'}
+          {' · ETA ' + formatEta(p.etaMs)}
+          {(p.actualCostUsd > 0 || p.estimatedCostUsd > 0) && (
+            ' · spent ' + formatCostShort(p.actualCostUsd || 0) +
+            (p.estimatedCostUsd > (p.actualCostUsd || 0)
+              ? ' / est ' + formatCostShort(p.estimatedCostUsd)
+              : '')
+          )}
+        </span>
+      </div>
+      {job.filePath && <div style={{fontSize: 10, color: 'var(--text-dim)', marginTop: 4, fontFamily: 'var(--font-mono)'}}>{job.filePath}</div>}
+      {p.message && <div style={{fontSize: 10, color: 'var(--text-dim)', marginTop: 4, fontFamily: 'var(--font-mono)'}}>{p.message}</div>}
+      {job.lastError && <div style={{fontSize: 10, color: 'var(--red)', marginTop: 4, fontFamily: 'var(--font-mono)'}}>Error: {job.lastError}</div>}
+    </div>
+  );
+}
+
+// ─── Source folder row (Sources view) ───
+function SourceRow({ source, busy, onOpen, onAction }) {
+  const { folderPath, files, pending, processing, completed, failed, cancelled,
+    spentUsd, estimatedRemainingUsd, paused, stopped, snapshotSize } = source;
+  const stateLabel = stopped ? 'STOPPED' : paused ? 'PAUSED' : processing > 0 ? 'ACTIVE' : pending > 0 ? 'QUEUED' : 'IDLE';
+  const stateColor = stopped ? 'var(--red)' : paused ? 'var(--amber)' : processing > 0 ? 'var(--green)' : 'var(--text-dim)';
+  return (
+    <div className="job-card" style={{borderLeft: '3px solid ' + stateColor}}>
+      <div className="job-header">
+        <span className="job-label" style={{cursor: 'pointer', textDecoration: 'underline dotted'}} onClick={() => onOpen(folderPath)}>
+          {folderPath}
+        </span>
+        <span style={{fontFamily: 'var(--font-mono)', fontSize: 10, color: stateColor, letterSpacing: 1}}>{stateLabel}</span>
+        {stopped ? (
+          <button className="primary-btn" disabled={busy} onClick={() => onAction(folderPath, 'jump-start')}>Jump start</button>
+        ) : paused ? (
+          <button className="primary-btn" disabled={busy} onClick={() => onAction(folderPath, 'resume')}>Resume</button>
+        ) : (
+          <button className="ghost-btn" disabled={busy} onClick={() => onAction(folderPath, 'pause')}>Pause</button>
+        )}
+        {!stopped && (
+          <button className="ghost-btn" disabled={busy}
+            onClick={() => { if (confirm('Stop this folder and cancel its jobs?\n\n' + folderPath)) onAction(folderPath, 'stop'); }}
+            style={{color: 'var(--red)', borderColor: 'rgba(248,113,113,0.4)'}}>Stop</button>
+        )}
+      </div>
+      <div className="job-phase-row">
+        <span>
+          <strong>{files}</strong> files · {completed} done · {processing} active · {pending} queued
+          {failed > 0 && ' · ' + failed + ' failed'}
+          {cancelled > 0 && ' · ' + cancelled + ' cancelled'}
+          {snapshotSize > 0 && ' · ' + snapshotSize + ' in snapshot'}
+        </span>
+        <span>
+          spent <strong>{formatCostShort(spentUsd)}</strong>
+          {estimatedRemainingUsd > 0 && ' · est remaining ' + formatCostShort(estimatedRemainingUsd)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function IndexTab({ activeTab }) {
+  // view: 'queue' | 'sources' | 'folder'
+  const [view, setView] = useState('sources');
+  const [folderPath, setFolderPath] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const queueEnabled = view === 'queue';
+  const sourcesEnabled = view === 'sources';
+
+  const { jobs, stats: jobsStats, error: jobsError } = useIndexJobs(activeTab, queueEnabled);
+  const { sources, stats: sourcesStats, error: sourcesError } = useSources(activeTab, sourcesEnabled || view === 'folder');
+  const { jobs: folderJobs } = useFolderJobs(activeTab, view === 'folder' ? folderPath : null);
+
+  const stats = jobsStats || sourcesStats;
+  const error = (queueEnabled && jobsError) || (sourcesEnabled && sourcesError);
+
+  const cancel = async (id) => {
+    try {
+      const res = await authedFetch('http://localhost:3001/api/index-queue/jobs/' + id + '/cancel', { method: 'POST' });
+      if (!res.ok) { const t = await res.text(); console.warn('cancel failed', t); }
+    } catch (e) { console.warn(e); }
+  };
+
+  const queueAction = async (action) => {
+    setBusy(true);
+    try {
+      await authedFetch('http://localhost:3001/api/index-queue/' + action, { method: 'POST' });
+    } catch (e) { console.warn(action, e); }
+    finally { setBusy(false); }
+  };
+
+  const folderAction = async (path, action) => {
+    setBusy(true);
+    try {
+      await authedFetch(
+        'http://localhost:3001/api/index-queue/folder/' + action,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderPath: path }),
+        }
+      );
+    } catch (e) { console.warn('folder', action, e); }
+    finally { setBusy(false); }
+  };
+
+  if (error) return <div className="error-banner"><span className="dot dot-red" /> Failed to load index queue.</div>;
+
+  const paused = stats?.paused;
+  const stopped = stats?.stopped;
+  const snapshotSize = stats?.stoppedSnapshotSize ?? 0;
+  const throughput = stats?.throughputJobsPerSec ?? 0;
+  const enqueueRate = (stats?.enqueuedLastMin ?? 0) / 60;
+  const netDrain = throughput - enqueueRate;
+  const remaining = (stats?.pending ?? 0) + (stats?.processing ?? 0);
+  let etaLabel = '—';
+  if (remaining === 0) etaLabel = 'idle';
+  else if (throughput > 0) {
+    const rate = netDrain > 0.01 ? netDrain : throughput;
+    const sec = remaining / rate;
+    etaLabel = formatEta(sec * 1000) + (netDrain <= 0.01 && enqueueRate > throughput ? ' (still uploading)' : '');
+  } else if (stats?.processing > 0) {
+    etaLabel = 'measuring…';
+  }
+
+  const barBg = stopped ? 'rgba(248,113,113,0.10)' : paused ? 'rgba(251,191,36,0.12)' : 'rgba(108,99,255,0.06)';
+  const barBorder = stopped ? 'var(--red)' : paused ? 'var(--amber)' : 'var(--accent)';
+  const stateLabel = stopped ? '⏹ Queue STOPPED' : paused ? '⏸ Queue paused' : '▶ Queue running';
+
+  // Sub-view navigation (queue / sources / active folder)
+  const SubTab = ({ id, label }) => (
+    <button className={'tab-btn' + (view === id ? ' active' : '')}
+      onClick={() => { setView(id); if (id !== 'folder') setFolderPath(null); }}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div>
+      <div className="save-bar" style={{background: barBg, borderColor: barBorder}}>
+        <span style={{flex: 1, fontFamily: 'var(--font-mono)', fontSize: 12}}>
+          {stateLabel} ·{' '}
+          throughput <strong>{throughput.toFixed(2)}/s</strong> · enqueue <strong>{enqueueRate.toFixed(2)}/s</strong> · ETA <strong>{etaLabel}</strong>
+          {' · spent '} <strong>{formatCostShort(stats?.spentUsd ?? 0)}</strong>
+          {stats?.estimatedRemainingUsd > 0 && ' · est remaining ' + formatCostShort(stats.estimatedRemainingUsd)}
+          {snapshotSize > 0 && stopped && ' · ' + snapshotSize + ' held in snapshot'}
+        </span>
+        {stopped ? (
+          <button className="primary-btn" onClick={() => queueAction('jump-start')} disabled={busy}>Jump start</button>
+        ) : paused ? (
+          <button className="primary-btn" onClick={() => queueAction('resume')} disabled={busy}>Resume</button>
+        ) : (
+          <button className="ghost-btn" onClick={() => queueAction('pause')} disabled={busy}>Pause</button>
+        )}
+        {!stopped && (
+          <button className="ghost-btn"
+            onClick={() => { if (confirm('Stop and cancel ALL jobs?\n\nPending sources will be snapshotted. Use "Jump start" to resume them.')) queueAction('stop'); }}
+            disabled={busy} style={{color: 'var(--red)', borderColor: 'rgba(248,113,113,0.4)'}}>Stop all</button>
+        )}
+      </div>
+
+      <div className="tab-bar" style={{paddingLeft: 0, marginTop: 12, marginBottom: 8, borderBottom: '1px solid var(--border)'}}>
+        <SubTab id="sources" label={'Sources' + (sources.length ? ' (' + sources.length + ')' : '')} />
+        <SubTab id="queue" label="Queue" />
+        {view === 'folder' && <SubTab id="folder" label={'Folder: ' + (folderPath || '')} />}
+      </div>
+
+      <div className="stat-grid stat-grid-5">
+        <StatCard label="Processing" value={stats?.processing ?? 0} sub={paused ? 'PAUSED' : (stats?.processing > 0 ? 'In flight' : 'idle')} />
+        <StatCard label="Pending" value={stats?.pending ?? 0} sub={netDrain > 0 ? 'catching up' : enqueueRate > 0 ? 'falling behind' : ''} />
+        <StatCard label="Done (last 5min)" value={stats?.completedLast5Min ?? 0} sub={'avg ' + formatEta(stats?.medianJobDurationMs ?? 0) + ' / job'} />
+        <StatCard label="Failed" value={stats?.failed ?? 0} />
+        <StatCard label="Cancelled" value={stats?.cancelled ?? 0} />
+      </div>
+
+      {view === 'sources' && (
+        <div>
+          <div className="section-title">Sources — grouped by folder</div>
+          {sources.length === 0 ? (
+            <div className="stat-card" style={{padding: '20px 16px', color: 'var(--text-dim)', fontSize: 12, textAlign: 'center'}}>
+              No sources yet. Upload a file or watch a folder to start indexing.
+            </div>
+          ) : sources.map(s => (
+            <SourceRow key={s.folderPath} source={s} busy={busy}
+              onOpen={(p) => { setFolderPath(p); setView('folder'); }}
+              onAction={folderAction} />
+          ))}
+        </div>
+      )}
+
+      {view === 'queue' && (
+        <div>
+          <div className="section-title">Jobs</div>
+          {jobs.length === 0 ? (
+            <div className="stat-card" style={{padding: '20px 16px', color: 'var(--text-dim)', fontSize: 12, textAlign: 'center'}}>
+              No jobs in queue. Upload a file to start indexing.
+            </div>
+          ) : jobs.map(j => <JobCard key={j.id} job={j} onCancel={cancel} />)}
+        </div>
+      )}
+
+      {view === 'folder' && folderPath && (
+        <FolderDetail
+          folderPath={folderPath}
+          jobs={folderJobs}
+          source={sources.find(s => s.folderPath === folderPath)}
+          busy={busy}
+          onBack={() => { setView('sources'); setFolderPath(null); }}
+          onCancel={cancel}
+          onAction={folderAction}
+        />
+      )}
+    </div>
+  );
+}
+
+function FolderDetail({ folderPath, jobs, source, busy, onBack, onCancel, onAction }) {
+  const paused = source?.paused;
+  const stopped = source?.stopped;
+  return (
+    <div>
+      <div className="section-title" style={{display: 'flex', alignItems: 'center', gap: 12, marginTop: 12}}>
+        <button className="ghost-btn" onClick={onBack}>&larr; Sources</button>
+        <span style={{fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)'}}>{folderPath}</span>
+        {source && (
+          <span style={{marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)'}}>
+            {source.files} files · spent <strong style={{color: 'var(--text)'}}>{formatCostShort(source.spentUsd)}</strong>
+            {source.estimatedRemainingUsd > 0 && ' · est remaining ' + formatCostShort(source.estimatedRemainingUsd)}
+          </span>
+        )}
+      </div>
+      <div className="save-bar" style={{marginTop: 0, background: stopped ? 'rgba(248,113,113,0.10)' : paused ? 'rgba(251,191,36,0.12)' : 'rgba(108,99,255,0.06)', borderColor: stopped ? 'var(--red)' : paused ? 'var(--amber)' : 'var(--accent)'}}>
+        <span style={{flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11}}>
+          {stopped ? 'Folder stopped — ' + (source?.snapshotSize ?? 0) + ' sources in snapshot'
+            : paused ? 'Folder paused — in-flight jobs still draining'
+            : 'Folder live — ' + (source?.processing ?? 0) + ' active / ' + (source?.pending ?? 0) + ' queued'}
+        </span>
+        {stopped ? (
+          <button className="primary-btn" disabled={busy} onClick={() => onAction(folderPath, 'jump-start')}>Jump start</button>
+        ) : paused ? (
+          <button className="primary-btn" disabled={busy} onClick={() => onAction(folderPath, 'resume')}>Resume</button>
+        ) : (
+          <button className="ghost-btn" disabled={busy} onClick={() => onAction(folderPath, 'pause')}>Pause folder</button>
+        )}
+        {!stopped && (
+          <button className="ghost-btn" disabled={busy}
+            onClick={() => { if (confirm('Stop this folder?\n\n' + folderPath)) onAction(folderPath, 'stop'); }}
+            style={{color: 'var(--red)', borderColor: 'rgba(248,113,113,0.4)'}}>Stop folder</button>
+        )}
+      </div>
+      <div className="section-title">Files</div>
+      {jobs.length === 0 ? (
+        <div className="stat-card" style={{padding: '20px 16px', color: 'var(--text-dim)', fontSize: 12, textAlign: 'center'}}>
+          No active files in this folder.
+        </div>
+      ) : jobs.map(j => <JobCard key={j.id} job={j} onCancel={onCancel} />)}
+    </div>
+  );
+}
+
+// ─── Graph Tab (nodes/edges/weights spreadsheet) ───
+function fmtNum(n, dp) {
+  if (n === null || n === undefined) return '—';
+  const v = Number(n);
+  if (Number.isNaN(v)) return '—';
+  return dp ? v.toFixed(dp) : v.toLocaleString();
+}
+function fmtTime(s) {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleString(); } catch { return s; }
+}
+
+function GraphTab({ initialFilter, initialView }) {
+  const [view, setView] = useState(initialView || 'summary'); // summary | nodes | edges
+  const [summary, setSummary] = useState([]);
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [filter, setFilter] = useState(initialFilter || { userId: '', spaceId: '', workspaceId: '' });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // When App passes a fresh initialFilter (user clicked "View graph" on a row),
+  // adopt it so the Graph tab opens scoped to that user/index.
+  useEffect(() => {
+    if (initialFilter) setFilter(initialFilter);
+    if (initialView)   setView(initialView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilter, initialView]);
+
+  const qs = React.useMemo(() => {
+    const p = new URLSearchParams();
+    if (filter.userId) p.set('userId', filter.userId);
+    if (filter.spaceId) p.set('spaceId', filter.spaceId);
+    if (filter.workspaceId) p.set('workspaceId', filter.workspaceId);
+    return p.toString();
+  }, [filter]);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const url = view === 'summary'
+        ? 'http://localhost:3001/api/dev/graph/summary'
+        : 'http://localhost:3001/api/dev/graph/' + view + (qs ? '?' + qs : '');
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.error) { setError(json.error.message); return; }
+      if (view === 'summary') setSummary(json.data || []);
+      else if (view === 'nodes') setNodes(json.data || []);
+      else setEdges(json.data || []);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [view, qs]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const SubTab = ({ id, label, count }) => (
+    <button className={'tab-btn' + (view === id ? ' active' : '')} onClick={() => setView(id)}>
+      {label}{count !== undefined ? ' (' + count + ')' : ''}
+    </button>
+  );
+
+  const drillTo = (target, row) => {
+    const next = { ...filter };
+    if (row.userId) next.userId = row.userId;
+    if (row.spaceId) next.spaceId = row.spaceId;
+    if (row.workspaceId) next.workspaceId = row.workspaceId;
+    setFilter(next);
+    setView(target);
+  };
+
+  return (
+    <div>
+      <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:12}}>
+        <div className="tab-bar" style={{borderBottom:'none', marginBottom:0}}>
+          <SubTab id="summary" label="Summary" count={summary.length || undefined} />
+          <SubTab id="nodes"   label="Nodes" />
+          <SubTab id="edges"   label="Edges" />
+        </div>
+        <div style={{flex:1}} />
+        {(filter.userId || filter.spaceId || filter.workspaceId) && (
+          <button className="ghost-btn" onClick={() => setFilter({userId:'', spaceId:'', workspaceId:''})}>
+            Clear filters
+          </button>
+        )}
+        <button className="ghost-btn" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+      </div>
+
+      {(filter.userId || filter.spaceId || filter.workspaceId) && (
+        <div style={{fontSize:11, fontFamily:'var(--font-mono)', color:'var(--text-dim)', marginBottom:8}}>
+          Filtered by:
+          {filter.userId && <span style={{marginLeft:8}}>user={filter.userId.slice(0,8)}</span>}
+          {filter.spaceId && <span style={{marginLeft:8}}>space={filter.spaceId.slice(0,8)}</span>}
+          {filter.workspaceId && <span style={{marginLeft:8}}>workspace={filter.workspaceId.slice(0,8)}</span>}
+        </div>
+      )}
+
+      {error && <div className="error-banner"><span className="dot dot-red" /> {error}</div>}
+
+      {view === 'summary' && (
+        <div className="stat-card" style={{padding:0, overflow:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'var(--font-mono)'}}>
+            <thead style={{background:'rgba(255,255,255,0.04)'}}>
+              <tr style={{textAlign:'left', color:'var(--text-dim)'}}>
+                <th style={{padding:'8px 12px'}}>User</th>
+                <th style={{padding:'8px 12px'}}>Index (Space)</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Nodes</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Edges</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Avg sim</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Cross-user</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Key Δ</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Avg engag.</th>
+                <th style={{padding:'8px 12px'}}>Last indexed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.length === 0 && (
+                <tr><td colSpan={9} style={{padding:'16px 12px', color:'var(--text-dim)', textAlign:'center'}}>
+                  {loading ? 'Loading…' : 'No index records yet.'}
+                </td></tr>
+              )}
+              {summary.map((r, i) => (
+                <tr key={i} style={{borderTop:'1px solid var(--border)', cursor:'pointer'}}
+                    onClick={() => drillTo('nodes', r)}>
+                  <td style={{padding:'8px 12px'}}>
+                    <div style={{color:'#fff'}}>{r.userName || '—'}</div>
+                    <div style={{color:'var(--text-dim)', fontSize:10}}>{r.userEmail}</div>
+                  </td>
+                  <td style={{padding:'8px 12px'}}>{r.spaceName}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.nodeCount)}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.edgeCount)}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.avgSimilarity, 3)}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.crossUserEdges)}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.keyChangeCount)}</td>
+                  <td style={{padding:'8px 12px', textAlign:'right'}}>{fmtNum(r.avgEngagement, 2)}</td>
+                  <td style={{padding:'8px 12px'}}>{fmtTime(r.lastIndexedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {view === 'nodes' && (
+        <div className="stat-card" style={{padding:0, overflow:'auto', maxHeight: '70vh'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:10, fontFamily:'var(--font-mono)'}}>
+            <thead style={{background:'rgba(255,255,255,0.04)', position:'sticky', top:0}}>
+              <tr style={{textAlign:'left', color:'var(--text-dim)'}}>
+                <th style={{padding:'6px 10px'}}>Indexed</th>
+                <th style={{padding:'6px 10px'}}>User</th>
+                <th style={{padding:'6px 10px'}}>Doc / Section</th>
+                <th style={{padding:'6px 10px'}}>Magn.</th>
+                <th style={{padding:'6px 10px'}}>Type</th>
+                <th style={{padding:'6px 10px', textAlign:'right'}}>Engag.</th>
+                <th style={{padding:'6px 10px', textAlign:'right'}}>In</th>
+                <th style={{padding:'6px 10px', textAlign:'right'}}>Out</th>
+                <th style={{padding:'6px 10px'}}>Flags</th>
+                <th style={{padding:'6px 10px'}}>Embedding text</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.length === 0 && (
+                <tr><td colSpan={10} style={{padding:'16px 12px', color:'var(--text-dim)', textAlign:'center'}}>
+                  {loading ? 'Loading…' : 'No nodes match the current filter.'}
+                </td></tr>
+              )}
+              {nodes.map(n => (
+                <tr key={n.id} style={{borderTop:'1px solid var(--border)'}}>
+                  <td style={{padding:'6px 10px', whiteSpace:'nowrap', color:'var(--text-dim)'}}>{fmtTime(n.indexedAt)}</td>
+                  <td style={{padding:'6px 10px'}}>{n.userName || (n.userId ? n.userId.slice(0,8) : '—')}</td>
+                  <td style={{padding:'6px 10px'}}>
+                    <div style={{color:'#fff'}}>{n.documentTitle || '—'}</div>
+                    {n.sectionAlias && <div style={{color:'var(--text-dim)', fontSize:9}}>§ {n.sectionAlias}</div>}
+                  </td>
+                  <td style={{padding:'6px 10px'}}>{n.magnitude}</td>
+                  <td style={{padding:'6px 10px'}}>{n.threadType}</td>
+                  <td style={{padding:'6px 10px', textAlign:'right'}}>{fmtNum(n.engagementDepth, 2)}</td>
+                  <td style={{padding:'6px 10px', textAlign:'right'}}>{n.inEdges}</td>
+                  <td style={{padding:'6px 10px', textAlign:'right'}}>{n.outEdges}</td>
+                  <td style={{padding:'6px 10px'}}>
+                    {n.isKeyChange && <span style={{color:'var(--amber)', marginRight:4}}>KEY</span>}
+                    {n.isAIInvolved && <span style={{color:'var(--accent)', marginRight:4}}>AI</span>}
+                    {n.hasEvidence && <span style={{color:'var(--green)'}}>EV</span>}
+                  </td>
+                  <td style={{padding:'6px 10px', maxWidth:380, color:'var(--text-dim)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}
+                      title={n.embeddingText}>
+                    {n.embeddingText}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {view === 'edges' && (
+        <div className="stat-card" style={{padding:0, overflow:'auto', maxHeight: '70vh'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:10, fontFamily:'var(--font-mono)'}}>
+            <thead style={{background:'rgba(255,255,255,0.04)', position:'sticky', top:0}}>
+              <tr style={{textAlign:'left', color:'var(--text-dim)'}}>
+                <th style={{padding:'6px 10px', textAlign:'right'}}>Weight</th>
+                <th style={{padding:'6px 10px'}}>Type</th>
+                <th style={{padding:'6px 10px'}}>Source (user · doc · text)</th>
+                <th style={{padding:'6px 10px'}}>Target (user · doc · text)</th>
+                <th style={{padding:'6px 10px'}}>Reason</th>
+                <th style={{padding:'6px 10px'}}>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {edges.length === 0 && (
+                <tr><td colSpan={6} style={{padding:'16px 12px', color:'var(--text-dim)', textAlign:'center'}}>
+                  {loading ? 'Loading…' : 'No edges match the current filter.'}
+                </td></tr>
+              )}
+              {edges.map(e => (
+                <tr key={e.id} style={{borderTop:'1px solid var(--border)'}}>
+                  <td style={{padding:'6px 10px', textAlign:'right', color:e.similarity > 0.8 ? 'var(--green)' : '#fff'}}>
+                    {fmtNum(e.similarity, 3)}
+                  </td>
+                  <td style={{padding:'6px 10px'}}>
+                    {e.linkType}
+                    {e.crossUser && <span style={{color:'var(--accent)', marginLeft:4}}>×U</span>}
+                  </td>
+                  <td style={{padding:'6px 10px', maxWidth:340}}>
+                    <div style={{color:'#fff'}}>{e.source.userName || '—'} · {e.source.doc || '—'}</div>
+                    <div style={{color:'var(--text-dim)', fontSize:9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}
+                         title={e.source.text}>{e.source.text}</div>
+                  </td>
+                  <td style={{padding:'6px 10px', maxWidth:340}}>
+                    <div style={{color:'#fff'}}>{e.target.userName || '—'} · {e.target.doc || '—'}</div>
+                    <div style={{color:'var(--text-dim)', fontSize:9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}
+                         title={e.target.text}>{e.target.text}</div>
+                  </td>
+                  <td style={{padding:'6px 10px', color:'var(--text-dim)'}}>{e.reason || '—'}</td>
+                  <td style={{padding:'6px 10px', whiteSpace:'nowrap', color:'var(--text-dim)'}}>{fmtTime(e.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main App ───
+const TABS = ['Overview', 'MCP', 'Pipeline', 'Index', 'Graph', 'Models', 'Usage', 'Users', 'System', 'Traffic', 'Logs'];
+
+function App() {
+  const [activeTab, setActiveTab] = useState('Overview');
+  // Cross-tab launch: a child (Users / Summary row) can call openGraph(filter, view)
+  // to switch to the Graph tab pre-scoped. Bumping `pendingGraphNonce` forces the
+  // GraphTab effect to re-apply the filter even when the same user is selected
+  // twice in a row.
+  const [graphLaunch, setGraphLaunch] = useState({ filter: null, view: null, nonce: 0 });
+  const openGraph = useCallback((filter, view) => {
+    setGraphLaunch((prev) => ({ filter, view: view || 'summary', nonce: prev.nonce + 1 }));
+    setActiveTab('Graph');
+  }, []);
+  const { data, error } = useHealthData();
+
+  const allOk = data && data.status === 'healthy';
+
+  return (
+    <div className="console-shell">
+      <div className="console-header">
+        <span className="brand">Follow</span>
+        <span className="badge">DEV CONSOLE</span>
+        <div className="status-pill">
+          <span className={allOk ? 'dot dot-green dot-pulse' : error ? 'dot dot-red' : 'dot dot-amber'} />
+          {error ? 'Connection error' : allOk ? 'All systems operational' : data ? 'Degraded' : 'Connecting...'}
+        </div>
+        <span className="host">localhost:4000</span>
+      </div>
+
+      <div className="tab-bar">
+        {TABS.map(tab => (
+          <button key={tab} className={'tab-btn' + (activeTab === tab ? ' active' : '')} onClick={() => setActiveTab(tab)}>
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div className="tab-content">
+        {error && <div className="error-banner"><span className="dot dot-red" /> Unable to connect to API at localhost:3001. Is the server running?</div>}
+        {activeTab === 'Overview' && <OverviewTab data={data} />}
+        {activeTab === 'MCP' && <MCPTab data={data} />}
+        {activeTab === 'Pipeline' && <PipelineTab data={data} />}
+        {activeTab === 'Index' && <IndexTab activeTab={activeTab} />}
+        {activeTab === 'Graph' && (
+          <GraphTab
+            key={graphLaunch.nonce}
+            initialFilter={graphLaunch.filter}
+            initialView={graphLaunch.view}
+          />
+        )}
+        {activeTab === 'Models' && <ModelsTab />}
+        {activeTab === 'Usage' && <UsageTab />}
+        {activeTab === 'Users' && <UsersTab openGraph={openGraph} />}
+        {activeTab === 'System' && <SystemTab data={data} />}
+        {activeTab === 'Traffic' && <TrafficTab />}
+        {activeTab === 'Logs' && <LogsTab />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>

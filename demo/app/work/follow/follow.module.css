@@ -1,0 +1,1230 @@
+/* =========================================================================
+   Follow — page-specific styles (FOLLOW-PAGE-1 §4.3).
+   Ported from docs/prototypes/follow-page-scroll.html. Shell tokens
+   (--paper/-ink/-line/-soft/-gold/-accent/-radius/-font-*) are the global
+   ones from globals.css and are NOT redefined here. The reel's own dark theme
+   lives in FollowReel.css. The only page-local token is --navy (the dark band
+   used by the hero dots-mark and the stat strip), declared on .page so it stays
+   scoped to this route. Global utilities (.container/.section/.lede/.mono) are
+   reused directly in the markup rather than recreated here.
+   ========================================================================= */
+
+.page {
+  position: relative;
+  overflow-x: clip; /* contain the full-bleed strip + reel track; sticky-safe */
+  --navy: #0a1f33;
+}
+/* content layer above the page-wide ambient backdrop (AmbientField is z-index 0,
+   fixed; every section floats over it on this z-index:1 layer) */
+.pageContent {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- shared page type helpers (match the prototype's plain kicker/body) ---- */
+.kicker {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+.body {
+  margin-top: 14px;
+  color: var(--ink-2);
+}
+.band {
+  background: var(--card);
+  border-block: 1px solid var(--line);
+}
+
+/* the white "gap" block — problem · today's structure · insights, unified on one
+   elevated white surface over the page ambient (Material-style layering) */
+.blockWhite {
+  background: #fff;
+  border-block: 1px solid var(--line);
+}
+.blockWhite > * + * {
+  margin-top: var(--space-8);
+}
+
+/* HMW statement */
+.hmwEyebrow {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+.hmw {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  max-width: 20ch;
+}
+.hmw em {
+  color: var(--accent);
+  font-style: normal;
+}
+/* HMW on glass (ROUND-2026-07-16) — the blue/orange ambient orbs blur through,
+   the same feel as the timeline band */
+.hmwGlass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-rest);
+  padding: var(--space-6);
+}
+@media (min-width: 720px) {
+  .hmwGlass {
+    padding: var(--space-7);
+  }
+}
+
+/* Follow concept — the reveal */
+.revealName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(56px, 10vw, 112px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  margin-top: 8px;
+}
+.revealName .dot {
+  color: var(--accent);
+}
+.revealLine {
+  margin-top: 14px;
+  margin-bottom: 30px;
+  font-size: clamp(16px, 2.4vw, 21px);
+  line-height: 1.45;
+  color: var(--ink-2);
+  max-width: var(--maxw-text);
+}
+.revealLine em {
+  color: var(--accent-deep);
+  font-style: italic;
+}
+
+/* problem-section display statement (D13/14) — promoted from the old hero
+   headline. Mirrors .reelTitle's font-size/weight/line-height/letter-spacing
+   (see "How it works" below) so it reads as the same big-title voice used
+   for section titles elsewhere on the page, even though it's a <p> (the
+   surrounding h2/h3 outline is unchanged). */
+.probState {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(24px, 4.6vw, 38px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: var(--space-5);
+}
+
+/* =========================================================================
+   TermTip (D15) — inline hover/tap/focus term definition, e.g. "transactive
+   memory system" in the problem paragraph. Mechanics + glass look ported
+   from the Greener Hours principle-chip tooltip (GhApp.module.css
+   .pchip/.pTip), replacing the old standalone .defNote aside. Sized/
+   positioned for a trigger sitting inline in running text rather than in a
+   wide relatively-positioned block: centered on the term itself
+   (left:50%/translateX(-50%)) with a viewport-scaled width instead of
+   GhApp's left:8px/right:8px stretch (which assumes a wide ancestor).
+   ========================================================================= */
+.termWrap {
+  position: relative;
+  display: inline-block;
+}
+.termTrigger {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.termTrigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.termTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  /* --tt-shift: a px nudge from TermTip.tsx's post-layout viewport clamp,
+     0px until measured (the common centered-term case never moves). */
+  transform: translateX(calc(-50% + var(--tt-shift, 0px)));
+  z-index: 5;
+  /* min- and max-width share the same 82vw term so they can never invert on
+     narrow screens — a bare "min-width: 300px" would exceed a "82vw"
+     max-width below ~366px, and browsers resolve that conflict by honoring
+     min-width, silently overflowing the viewport around an off-centre,
+     mid-paragraph trigger. */
+  min-width: min(300px, 82vw);
+  max-width: min(340px, 82vw);
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-lift);
+  text-align: left;
+  animation: termTipIn 0.13s var(--e-snappy);
+}
+.termTipBody {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: normal;
+  color: var(--ink-2);
+}
+.termTipBody em {
+  color: var(--accent-deep);
+  font-style: normal;
+}
+.termTipSource {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--soft);
+}
+@keyframes termTipIn {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-50% + var(--tt-shift, 0px))) translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(calc(-50% + var(--tt-shift, 0px)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .termTip {
+    animation: none;
+  }
+}
+
+/* =========================================================================
+   Hero
+   ========================================================================= */
+.hero {
+  width: 100%;
+  max-width: var(--maxw-wide);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+  padding-top: 64px;
+  padding-bottom: 44px;
+}
+.heroBody {
+  position: relative;
+}
+.dotsmark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.dotsmark .dots {
+  display: flex;
+  gap: 9px;
+}
+.dotsmark .d {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--navy);
+}
+.dotsmark .d.ai {
+  background: transparent;
+  border: 2px solid var(--accent);
+}
+.dotsmark .ml {
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.dotsmark .ml em {
+  color: var(--accent);
+  font-style: normal;
+}
+.heroEyebrow {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 18px;
+}
+/* giant deck-style wordmark — the bold opener */
+.heroLockup {
+  font-family: var(--font-display);
+  /* 700 is the heaviest Bricolage weight loaded (layout.tsx) — 800 would silently
+     fall back to it anyway. Floor kept low enough that the single unbreakable
+     "Follow." (incl. the accent dot) stays within the page-level overflow-x:clip
+     (.page) and never forces horizontal scroll on ~320px phones. */
+  font-weight: 700;
+  font-size: clamp(54px, 14vw, 156px);
+  line-height: 0.88;
+  letter-spacing: -0.045em;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+.heroLockup .dot {
+  color: var(--accent);
+}
+.heroTitle {
+  margin-top: 18px;
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.04;
+  color: var(--ink);
+  max-width: 20ch;
+}
+.heroTitle em {
+  color: var(--accent);
+  font-style: italic;
+}
+.heroSub {
+  margin-top: 22px;
+  max-width: var(--maxw-text);
+  font-size: clamp(15px, 2.4vw, 19px);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* =========================================================================
+   Project timeline (deck-style horizontal)
+   ========================================================================= */
+/* the legend + chart sit on a full-bleed frosted-glass band (the Healthy
+   Materials timeline recipe): the blue/orange ambient orbs blur through it
+   behind the chart. .page has overflow-x:clip, so the 100vw bleed adds no
+   horizontal scrollbar. */
+.tlGlass {
+  margin-top: var(--space-5);
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  padding-block: clamp(28px, 4vw, 48px);
+  background: rgba(252, 251, 247, 0.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(16px) saturate(1.08);
+  border-top: 1px solid rgba(26, 26, 26, 0.06);
+  border-bottom: 1px solid rgba(26, 26, 26, 0.06);
+}
+/* the chart keeps (roughly) its old measure, centered inside the band */
+.tlGlassInner {
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+.tlGlass .tlLegend {
+  margin-top: 0;
+}
+
+.tlLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 18px;
+}
+.tlLegend .it {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--soft);
+}
+.tlLegend .sw {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.tlLegend .sw.ink {
+  background: var(--ink);
+}
+.tlLegend .sw.acc {
+  background: var(--accent);
+}
+.tlLegend .sw.holo {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+.tlLegend .sw.piv {
+  width: 14px;
+  height: 4px;
+  border-radius: 0;
+  background: var(--accent);
+}
+.tlScroll {
+  margin-top: 18px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+}
+.tlScroll svg {
+  display: block;
+  min-width: 840px;
+  width: 100%;
+  height: auto;
+}
+.tlFoot {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--soft);
+  line-height: 1.55;
+  max-width: 70ch;
+}
+.tlFoot strong {
+  color: var(--ink);
+}
+
+/* a clubbed sub-block under the timeline (the research methodology), set off by
+   a hairline so the journey + how-we-know read as one section */
+.clubbed {
+  margin-top: 44px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+/* =========================================================================
+   Research & interviews
+   ========================================================================= */
+.rcols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start; /* an expanded Unfold column must not stretch the other */
+  gap: 28px;
+  margin-top: 24px;
+}
+/* mobile: native scroll-snap swipe row instead of a stacked single column —
+   bleeds to the viewport edge past the container's --page-pad, then
+   re-applies that same amount as the row's own padding so cards still line
+   up with the rest of the page's left/right rhythm. */
+@media (max-width: 759px) {
+  .rcols {
+    display: flex;
+    grid-template-columns: none;
+    gap: 24px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--page-pad));
+    padding-inline: var(--page-pad);
+    scroll-padding-inline: var(--page-pad);
+  }
+  .rcols::-webkit-scrollbar {
+    display: none;
+  }
+  .rcols > * {
+    flex: 0 0 min(82%, 330px);
+    scroll-snap-align: start;
+  }
+}
+/* (.rcol wrappers retired — the research columns are glass Unfolds now;
+   the shared .rlabel rule below styles the in-header labels) */
+.rcol h3 {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.rlist {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.rlist .r {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--soft);
+}
+.rlist .r::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  top: -2px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 17px;
+}
+.rlist .r strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rlist .r .kind {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-top: 1px;
+}
+/* a standalone research label (e.g. "What we heard") */
+.rlabel {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.insights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 30px;
+}
+/* mobile: native scroll-snap swipe row instead of a stacked single column —
+   see .rcols above for the bleed/re-pad convention. */
+@media (max-width: 759px) {
+  .insights {
+    display: flex;
+    grid-template-columns: none;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--page-pad));
+    padding-inline: var(--page-pad);
+    scroll-padding-inline: var(--page-pad);
+  }
+  .insights::-webkit-scrollbar {
+    display: none;
+  }
+  .insights > * {
+    flex: 0 0 min(82%, 330px);
+    scroll-snap-align: start;
+  }
+}
+.ins {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.ins .num {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.ins h3 {
+  /* semantically h3 under the section's h2 kicker (h1 → h2 → h3, a contiguous
+     outline); display face at 18px to match every other card-title tier
+     (Phase 8 typography). */
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 18px;
+  margin-top: 8px;
+  letter-spacing: -0.01em;
+}
+.ins p {
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--soft);
+  line-height: 1.55;
+}
+.guilt {
+  margin-top: 22px;
+  border-left: 3px solid var(--accent);
+  padding: 6px 0 6px 18px;
+  max-width: 70ch;
+}
+.guilt p {
+  font-size: clamp(15px, 2.2vw, 18px);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.guilt .src {
+  margin-top: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--soft);
+}
+
+/* =========================================================================
+   Section heads (shared by the structural-change block + the sandbox) + the
+   mono footnote under diagrams. (The reel two-up + write-up styles left with
+   the pipeline reel, FOLLOW-SYS-1.)
+   ========================================================================= */
+.reelHead {
+  margin-bottom: 22px;
+}
+.reelTitle {
+  font-size: clamp(24px, 4.6vw, 38px);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+}
+.reelTitle em {
+  color: var(--accent);
+}
+.reelNote {
+  margin-top: 14px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--soft);
+  max-width: var(--maxw-text);
+}
+
+/* =========================================================================
+   What it does (FOLLOW-SYS-1) — the RAG-vs-Follow compare strip. The feature
+   tiles below it are <Unfold variant="card"> in the .cards grid (ROUND-2026-07-16).
+   ========================================================================= */
+.rag {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 26px;
+}
+@media (max-width: 719px) {
+  .rag {
+    grid-template-columns: 1fr;
+  }
+}
+.ragCard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  background: var(--card);
+}
+.ragF {
+  background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
+}
+/* portfolio-style line glyphs (the sandbox icon recipe: currentColor
+   stroke, 1.7, round) — same magnifier on both cards, different subject:
+   RAG searches text lines, Follow searches a graph node */
+.ragIcon {
+  display: block;
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--soft);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-bottom: 10px;
+}
+.ragF .ragIcon {
+  stroke: var(--accent);
+}
+.ragTag {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.ragF .ragTag {
+  color: var(--accent-deep);
+}
+.ragClaim {
+  margin-top: 8px;
+  font-size: clamp(17px, 2.4vw, 20px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ragSub {
+  margin-top: 6px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--soft);
+}
+/* the little referee — sits between the two cards (between the two rows once
+   they stack) */
+.ragVs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-rest);
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--soft);
+}
+.ragNote {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--soft);
+}
+
+/* =========================================================================
+   Differentiators
+   ========================================================================= */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: start; /* an expanded Unfold must not stretch its row-mates */
+  gap: 16px;
+  margin-top: 24px;
+}
+/* collapsed evenness: reserve the tallest measured header per width range so
+   1-line and 2-line titles hold the same card height (UNFOLD-POLISH; re-measure
+   if the tile titles change). ≥1200 and the swipe row are naturally even. */
+@media (min-width: 760px) and (max-width: 999px) {
+  .cards {
+    --unfold-head-min: 140px;
+  }
+}
+@media (min-width: 1000px) and (max-width: 1199px) {
+  .cards {
+    --unfold-head-min: 112px;
+  }
+}
+/* mobile: native scroll-snap swipe row instead of a stacked single column —
+   see .rcols above for the bleed/re-pad convention. */
+@media (max-width: 759px) {
+  .cards {
+    display: flex;
+    grid-template-columns: none;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-inline: calc(-1 * var(--page-pad));
+    padding-inline: var(--page-pad);
+    scroll-padding-inline: var(--page-pad);
+  }
+  .cards::-webkit-scrollbar {
+    display: none;
+  }
+  .cards > * {
+    flex: 0 0 min(82%, 330px);
+    scroll-snap-align: start;
+  }
+}
+/* the differentiator tiles are <Unfold variant="card"> now (ROUND-2026-07-16):
+   the Unfold supplies the card chrome + hover-lift, so only the collapsed
+   header content (accent glyph + number + title) and the unfolding body are
+   styled here. .card p → .widBody (see Phase 8 typography). */
+.widHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+.widIcon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  color: var(--accent);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.widText {
+  min-width: 0;
+}
+.widNo {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.widTitle {
+  font-size: 18px;
+  margin-top: 3px;
+  letter-spacing: -0.01em;
+}
+.widBody {
+  font-size: 15px;
+  color: var(--soft);
+  line-height: 1.55;
+}
+
+/* glass hover-lift for the insight cards (the differentiator tiles moved to
+   <Unfold>, which brings the global .lift recipe with it). Pointer-only; the
+   lift is gated on no-preference so reduced-motion users get the (still)
+   border/shadow change without movement. */
+@media (hover: hover) {
+  .ins {
+    transition:
+      transform var(--t-soft) var(--e-gentle),
+      box-shadow var(--t-soft) var(--e-gentle),
+      border-color var(--t-soft) var(--e-gentle);
+  }
+  .ins:hover {
+    border-color: var(--accent-wash);
+    box-shadow:
+      0 2px 4px rgba(26, 26, 26, 0.05),
+      0 16px 40px rgba(26, 26, 26, 0.09);
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ins:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* (the "four questions" grid was removed — section deleted DESIGN-PHASE-1 v3) */
+
+
+/* =========================================================================
+   The sandbox (FOLLOW-DEMO-1) — full-bleed band for the working sandbox,
+   like .tlGlass; .page has overflow-x:clip so the 100vw pull is scrollbar-safe.
+   ========================================================================= */
+.appBleed {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  margin-top: var(--space-5);
+  padding-inline: clamp(14px, 3vw, 44px);
+  /* the tour's "show me" scrolls here — clear the ~60px sticky nav */
+  scroll-margin-top: 76px;
+}
+.appBleedInner {
+  max-width: 1280px;
+  margin-inline: auto;
+  /* the demo tour's overlay portals in here and positions against it */
+  position: relative;
+}
+.storyCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: var(--radius, 12px);
+  background: color-mix(in srgb, var(--accent-tint, #fbefe7) 55%, var(--card));
+  padding: 18px 20px;
+  margin: 18px 0 16px;
+}
+.storyKicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep, #9e340a);
+}
+/* the story is a 3-step strip now (ROUND-2026-07-16): mono number · bold
+   mini-title · short body; 3 columns ≥900px, stacked below */
+.storySteps {
+  display: grid;
+  gap: 18px;
+  margin-top: 2px;
+}
+@media (min-width: 900px) {
+  .storySteps {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+  }
+}
+.storyStep {
+  padding-top: 11px;
+  border-top: 2px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.storyNum {
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--accent-deep, #9e340a);
+}
+.storyStepTitle {
+  margin: 3px 0 0;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.storyStepBody {
+  margin: 5px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.techLine {
+  margin: 10px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--soft);
+}
+.techLine a {
+  color: inherit;
+}
+.techLine a:hover {
+  color: var(--accent);
+}
+
+/* =========================================================================
+   The demo tour (FOLLOW-SYS-1) — five numbered onboarding stops above the
+   sandbox. Desktop: one row of five glass cards; below 1000px the row
+   becomes the page's usual scroll-snap swipe rail (the .rcols convention).
+   ========================================================================= */
+.tour {
+  margin-top: 20px;
+}
+.tourKicker {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+/* one-liner stop pills — number · title · ↓; they wrap instead of scrolling */
+.tourRail {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tourStop {
+  display: contents;
+}
+.tourGo {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  font: inherit;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-rest);
+}
+@media (hover: hover) {
+  .tourGo {
+    transition:
+      transform var(--t-soft) var(--e-gentle),
+      box-shadow var(--t-soft) var(--e-gentle);
+  }
+  .tourGo:hover {
+    box-shadow: var(--shadow-lift);
+  }
+  .tourGo:hover .tourTitle {
+    color: var(--accent);
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tourGo:hover {
+    transform: translateY(-2px);
+  }
+}
+.tourGo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tourNo {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.tourTitle {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.tourArrow {
+  font-size: 11px;
+  color: var(--soft);
+}
+
+/* ---- the spotlight (portaled INTO the sandbox stage) ----
+   Confined to the demo: every piece is absolutely positioned within
+   #follow-sandbox-stage, so the whole tour scrolls with the sandbox and
+   never rides the viewport. Four dim panels leave a live hole around the
+   target; the accent ring marks it; the coach card sits in a sticky dock —
+   viewport-bottom while the sandbox is on screen, sandbox-bottom after.
+   Geometry comes inline from the rAF tracker (stage-relative). */
+.spot {
+  position: absolute;
+  inset: 0;
+  z-index: 140;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .spot {
+    animation: spotIn 0.22s ease-out;
+  }
+}
+@keyframes spotIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.spotDim {
+  position: absolute;
+  background: rgba(10, 18, 28, 0.55);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.spotRing {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 12px 44px rgba(10, 18, 28, 0.35);
+}
+/* the landing flash — replays per stop (the ring remounts, keyed on stop) */
+@media (prefers-reduced-motion: no-preference) {
+  .spotRing {
+    animation: spotFlash 0.75s ease-out;
+  }
+}
+@keyframes spotFlash {
+  0% {
+    box-shadow:
+      0 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent),
+      0 12px 44px rgba(10, 18, 28, 0.35);
+  }
+  38% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+      0 12px 44px rgba(10, 18, 28, 0.35);
+  }
+  58% {
+    box-shadow:
+      0 0 0 9px color-mix(in srgb, var(--accent) 32%, transparent),
+      0 12px 44px rgba(10, 18, 28, 0.35);
+  }
+  100% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+      0 12px 44px rgba(10, 18, 28, 0.35);
+  }
+}
+/* the message dock: ONE fixed spot — bottom-center of the sandbox stage.
+   measure() clamps the spotlight hole above this band, so the message and
+   the spotlight never overlap */
+.spotDockWrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  justify-content: center;
+  padding: 0 12px;
+  pointer-events: none;
+}
+.spotCard {
+  position: relative;
+  width: min(460px, 100%);
+  padding: 14px 16px 13px;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-lift);
+  pointer-events: auto;
+  outline: none;
+}
+.spotCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.spotNo {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.spotTitle {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-top: 4px;
+}
+.spotLine {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.spotBtns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.spotGhost {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 5px 8px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--soft);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.spotGhost:hover:not(:disabled) {
+  color: var(--accent);
+}
+.spotGhost:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.spotNext {
+  appearance: none;
+  border: 0;
+  margin-left: auto;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.spotNext:hover {
+  background: var(--accent-deep);
+}
+.spotGhost:focus-visible,
+.spotNext:focus-visible,
+.spotSkip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.spotHint {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--soft);
+}
+.spotSkip {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: var(--soft);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.spotSkip:hover {
+  color: var(--ink);
+}
+
+.sandboxFoot {
+  margin-top: 14px;
+  text-align: right;
+  font-size: 11px;
+}
+.sandboxFoot a {
+  color: var(--soft);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1px;
+}
+.sandboxFoot a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- "Under the hood" disclosure (the fsys slab's 0fr→1fr recipe) ---- */
+.hoodH {
+  margin-bottom: 0; /* the closed fold ends at the title, not the kicker gap */
+}
+.hoodBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .hoodBtn:hover {
+    color: var(--accent);
+  }
+}
+.hoodChev {
+  display: inline-block;
+  color: var(--accent);
+  transition: transform var(--t-gentle) var(--e-gentle);
+}
+.hoodOpen .hoodChev {
+  transform: rotate(180deg);
+}
+.hoodPanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--t-gentle) var(--e-gentle);
+}
+.hoodOpen .hoodPanel {
+  grid-template-rows: 1fr;
+}
+.hoodClip {
+  overflow: hidden;
+  min-height: 0;
+}
+/* the unfolded tech notes sit in the same glass window as every other
+   dropdown on the site (UNFOLD-POLISH) */
+.hoodGlass {
+  margin-top: 16px; /* the kicker gap moves inside the fold */
+  padding: var(--space-4) var(--space-5);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  /* borderless like every dropdown glass (glass round 2) */
+  border: 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-rest);
+}
+.hoodGlass > p {
+  margin-top: 0;
+}
+.hoodGlass > p + p {
+  margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoodChev,
+  .hoodPanel {
+    transition: none;
+  }
+}

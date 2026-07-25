@@ -1,0 +1,32 @@
+# Docker build context excludes — keeps the image small and the build
+# reproducible (deps come from the frozen lockfile, not the host).
+.git
+.github
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+.turbo
+
+# Local data / runtime artifacts
+**/data
+data
+logs
+**/logs
+*.log
+
+# Secrets / local env (Railway injects env at runtime)
+.env
+.env.*
+**/.env
+**/.env.*
+.ngrok-authtoken
+
+# Local infra volumes
+postgres_data
+redis_data
+clickhouse_data
+minio_data
+
+# Archived docs — not needed at runtime
+_archive

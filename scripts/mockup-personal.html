@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Personal Index</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #FAFAF9;
+    --panel: #FFFFFF;
+    --border: #EAEAE8;
+    --border-strong: #D7D7D4;
+    --text: #1C1C1B;
+    --text-muted: #6B6B68;
+    --text-faint: #9B9B97;
+    --accent: #6C63FF;
+    --green: #10B981;
+    --teal: #10a37f;
+    --cyan: #0EA5E9;
+    --orange: #F59E0B;
+    --purple: #6C63FF;
+    --pink: #EC4899;
+  }
+  body { font-family: -apple-system, "Inter", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.45; overflow: hidden; }
+  .app { display: flex; height: 100vh; }
+
+  /* === Sidebar (same as project) === */
+  .sidebar { width: 240px; background: #F5F4F1; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px; flex-shrink: 0; }
+  .brand { font-size: 16px; font-weight: 600; padding: 4px 8px 16px; }
+  .index-pick { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; font-size: 12px; }
+  .index-pick .swatch { width: 18px; height: 18px; background: linear-gradient(135deg, #FBBF24, #F59E0B); border-radius: 5px; }
+  .index-pick .name { flex: 1; font-weight: 500; }
+  .index-pick .chev { color: var(--text-faint); }
+  .nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); padding: 12px 10px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text); }
+  .nav-item.active { background: #E9E7E1; font-weight: 500; }
+  .nav-item .ico { width: 14px; text-align: center; color: var(--text-muted); font-size: 11px; }
+  .nav-item .count { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+  .stats { margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
+  .stats .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .profile { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 8px; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #FBBF24, #F59E0B); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 11px; }
+  .profile .name { font-size: 12px; font-weight: 500; }
+
+  /* === Main === */
+  .main { flex: 1; overflow-y: auto; padding: 32px 48px 80px; }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .page-title { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .page-title .icon { width: 36px; height: 36px; background: linear-gradient(135deg, #FBBF24, #F59E0B); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; }
+  .page-title h1 { font-size: 22px; font-weight: 600; }
+  .page-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 28px; padding-left: 48px; }
+
+  .section-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-h h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-faint); font-weight: 600; }
+  .section-h .more { font-size: 11px; color: var(--text-muted); cursor: pointer; }
+
+  /* Expanded panels (matches project dashboard) */
+  .index-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .px-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .px-head { display: flex; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); background: #FBFAF7; }
+  .px-title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; flex: 1; }
+  .px-title .chev { color: var(--text-faint); font-size: 12px; }
+  .px-icon { font-size: 13px; }
+  .px-actions { display: flex; align-items: center; gap: 12px; }
+  .px-meta { font-size: 11px; color: var(--text-faint); }
+  .px-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; background: white; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .px-body { padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); font-weight: 600; }
+  .field-value { font-size: 13px; color: var(--text); line-height: 1.55; }
+  .field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .field-grid .field-value { font-size: 12px; }
+  .scope-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scope-tag { padding: 4px 10px; border-radius: 100px; background: #F1F0EC; font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); cursor: pointer; }
+
+  /* Open dropdown overlays */
+  .dropdown-overlay { position: absolute; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06); padding: 6px; z-index: 50; min-width: 220px; }
+  .dd-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); padding: 8px 10px 4px; font-weight: 600; }
+  .dd-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .dd-item:hover { background: #F5F4F1; }
+  .dd-item.checked { background: #F1F0EC; }
+  .dd-item .swatch-sm { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+  .dd-item .ico { width: 14px; text-align: center; color: var(--text-muted); flex-shrink: 0; }
+  .dd-item .meta { margin-left: auto; font-size: 10px; color: var(--text-faint); }
+  .dd-divider { height: 1px; background: var(--border); margin: 4px 6px; }
+  .sidebar { position: relative; }
+  .src-col { position: relative; }
+
+  /* Files / GWS rows (same component as project mockup) */
+  .files-row { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 14px; position: relative; }
+  .files-row .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .files-row .head .title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
+  .files-row .head .title .chev { color: var(--text-faint); cursor: pointer; }
+  .files-row .add { width: 26px; height: 26px; border-radius: 6px; background: #F1F0EC; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); border: 1px dashed var(--border-strong); }
+  .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .file-tile { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #FBFAF7; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; min-width: 0; }
+  .file-tile:hover { background: #F5F4F1; }
+  .file-tile .ftype { width: 28px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+  .file-tile .meta { min-width: 0; }
+  .file-tile .meta .n { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-tile .meta .s { font-size: 10px; color: var(--text-faint); }
+  .ftype.pdf { background: #DC2626; }
+  .ftype.doc { background: #2563EB; }
+  .ftype.xls { background: #059669; }
+  .ftype.img { background: #DB2777; }
+  .ftype.md  { background: #525252; }
+  .ftype.code{ background: #7C3AED; }
+  .ftype.gdoc{ background: #1A73E8; }
+  .ftype.gsht{ background: #0F9D58; }
+  .ftype.gsld{ background: #F4B400; }
+
+  /* Three-column source layout */
+  .sources { display: grid; grid-template-columns: 1.1fr 1fr 1.4fr; gap: 14px; margin-bottom: 14px; }
+  .src-col { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; min-height: 380px; }
+  .src-col .head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .src-col .logo { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .src-col .title { font-size: 13px; font-weight: 600; }
+  .src-col .sub { font-size: 11px; color: var(--text-faint); }
+  .src-col .add-btn { margin-left: auto; padding: 4px 10px; font-size: 11px; border-radius: 6px; background: #F1F0EC; cursor: pointer; color: var(--text-muted); border: 1px solid var(--border); }
+  .conv-list { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .conv { display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: 6px; cursor: pointer; }
+  .conv:hover { background: #F5F4F1; }
+  .conv .pill { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .conv .pill.purple { background: var(--purple); }
+  .conv .pill.teal { background: var(--teal); }
+  .conv .body { flex: 1; min-width: 0; }
+  .conv .body .t { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv .body .s { font-size: 10px; color: var(--text-faint); display: flex; gap: 6px; align-items: center; }
+  .conv .when { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+  .artifact-tag { font-size: 9px; padding: 1px 5px; border-radius: 100px; background: #EFEAFF; color: var(--purple); font-weight: 500; }
+
+  /* Third-party app tiles inside the right column */
+  .tp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; }
+  .tp-tile { background: #FBFAF7; border: 1px solid var(--border); border-radius: 8px; padding: 12px 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; min-height: 100px; }
+  .tp-tile:hover { background: #F5F4F1; }
+  .tp-tile.add { border: 1px dashed var(--border-strong); background: transparent; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; }
+  .tp-tile .top { display: flex; align-items: center; gap: 8px; }
+  .tp-tile .icon { width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+  .tp-tile .name { font-size: 12px; font-weight: 500; }
+  .tp-tile .status { margin-left: auto; font-size: 9px; padding: 1px 6px; border-radius: 100px; }
+  .status.connected { background: #DCFCE7; color: #047857; }
+  .status.disabled { background: #F1F0EC; color: var(--text-muted); }
+  .tp-tile .last { font-size: 10px; color: var(--text-faint); }
+  .tp-tile .count { font-size: 18px; font-weight: 600; }
+  .tp-tile .label { font-size: 10px; color: var(--text-muted); margin-top: -4px; }
+
+  /* Source logos */
+  .logo.claude { background: #6C63FF; }
+  .logo.chatgpt { background: #10a37f; }
+  .logo.cursor { background: #1F1F1F; }
+  .logo.slack { background: #4A154B; }
+  .logo.notion { background: #000; }
+  .logo.perplex { background: #1FB8CD; }
+  .logo.gemini { background: #1A73E8; }
+  .logo.zapier { background: #FF4F00; }
+  .logo.linear { background: #5E6AD2; }
+
+  /* Bottom: recent activity */
+  .recents { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 0; }
+  .activity { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .activity:last-child { border-bottom: none; }
+  .activity .src-pill { font-size: 10px; padding: 2px 8px; border-radius: 100px; flex-shrink: 0; }
+  .src-pill.claude { background: #EFEAFF; color: var(--purple); }
+  .src-pill.chatgpt { background: #D1FAE5; color: var(--teal); }
+  .src-pill.gws { background: #E0F2FE; color: var(--cyan); }
+  .src-pill.upload { background: #FEF3C7; color: var(--orange); }
+  .activity .text { flex: 1; font-size: 12px; }
+  .activity .target { color: var(--accent); }
+  .activity .when { font-size: 11px; color: var(--text-faint); width: 70px; text-align: right; }
+
+  .annotate { position: fixed; right: 24px; top: 24px; background: #FFF8E1; border: 1px dashed #F59E0B; padding: 12px 14px; border-radius: 8px; max-width: 280px; font-size: 11px; color: #78350F; z-index: 99; }
+  .annotate b { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="annotate"><b>Mockup — Personal Index</b>Maps to wireframe 2. Reuses sidebar + Files-row component from project dashboard. Connected = real backend. Connect = needs new OAuth + storage.</div>
+
+<div class="app">
+  <!-- ======= SIDEBAR ======= -->
+  <aside class="sidebar">
+    <div class="brand">Follow</div>
+    <div class="index-pick">
+      <div class="swatch"></div>
+      <div class="name">Personal</div>
+      <div class="chev">▾</div>
+    </div>
+    <!-- Index picker dropdown OPEN -->
+    <div class="dropdown-overlay" style="top: 86px; left: 250px; min-width: 260px;">
+      <div class="dd-title">Switch index</div>
+      <div class="dd-item checked"><div class="swatch-sm" style="background: linear-gradient(135deg,#FBBF24,#F59E0B);"></div><div>Personal</div><div class="meta">312</div></div>
+      <div class="dd-divider"></div>
+      <div class="dd-title">Projects</div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#6C63FF,#EC4899);"></div><div>Acme Q3 Launch</div><div class="meta">128</div></div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#10B981,#0EA5E9);"></div><div>Workspace App</div><div class="meta">94</div></div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#EC4899,#F59E0B);"></div><div>Demo Profile UX</div><div class="meta">37</div></div>
+      <div class="dd-divider"></div>
+      <div class="dd-item"><span class="ico">+</span><div>New project…</div></div>
+      <div class="dd-item"><span class="ico">⚙</span><div>Manage indexes</div></div>
+    </div>
+
+    <div class="nav-section">Personal</div>
+    <div class="nav-item active"><span class="ico">◉</span> Index</div>
+    <div class="nav-item"><span class="ico">◫</span> All Items <span class="count">312</span></div>
+    <div class="nav-item"><span class="ico">◯</span> Conversations <span class="count">94</span></div>
+    <div class="nav-item"><span class="ico">◫</span> Files <span class="count">186</span></div>
+    <div class="nav-item"><span class="ico">◈</span> Facts <span class="count">1.2k</span></div>
+
+    <div class="nav-section">Knowledge</div>
+    <div class="nav-item"><span class="ico">▤</span> Notebooks <span class="count">7</span></div>
+    <div class="nav-item"><span class="ico">⧉</span> Memory <span class="count">12</span></div>
+
+    <div class="stats">
+      <div class="row"><span>Facts</span><span>1,231</span></div>
+      <div class="row"><span>Files</span><span>186</span></div>
+      <div class="row"><span>Chats</span><span>94</span></div>
+    </div>
+    <div class="profile">
+      <div class="avatar">D</div>
+      <div class="name">Darshul</div>
+    </div>
+  </aside>
+
+  <!-- ======= MAIN ======= -->
+  <main class="main">
+    <div class="breadcrumb">Personal workspace</div>
+    <div class="page-title">
+      <div class="icon">D</div>
+      <h1>Personal Index</h1>
+    </div>
+    <div class="page-meta">Your private knowledge across files, chats, and connected apps.</div>
+
+    <!-- Personal profile expanded -->
+    <div class="section-h"><h2>About you</h2><span style="font-size: 11px; color: var(--text-muted); cursor: pointer;">Edit ›</span></div>
+    <div class="index-stack">
+      <div class="px-card">
+        <div class="px-head">
+          <div class="px-title">
+            <span class="chev">▾</span>
+            <span class="px-icon">👤</span>
+            Profile
+          </div>
+          <div class="px-actions">
+            <span class="px-meta">last edited yesterday</span>
+            <span class="px-btn">Edit</span>
+          </div>
+        </div>
+        <div class="px-body">
+          <div class="field">
+            <div class="field-label">About</div>
+            <div class="field-value">Founder & engineer building Follow / Workspace App. Mostly working in TypeScript, Drizzle, Next.js. Interested in knowledge-management UX and provenance.</div>
+          </div>
+          <div class="field-grid">
+            <div class="field"><div class="field-label">Email</div><div class="field-value">darshulrishabh@gmail.com</div></div>
+            <div class="field"><div class="field-label">Timezone</div><div class="field-value">Asia/Kolkata (UTC+5:30)</div></div>
+            <div class="field"><div class="field-label">Default model</div><div class="field-value">Opus 4.7</div></div>
+            <div class="field"><div class="field-label">Joined</div><div class="field-value">Jan 14, 2026</div></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Focus areas</div>
+            <div class="scope-tags">
+              <span class="scope-tag">workspace-app</span>
+              <span class="scope-tag">ai-ux</span>
+              <span class="scope-tag">drizzle</span>
+              <span class="scope-tag">mcp</span>
+              <span class="scope-tag">+ add</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-card">
+        <div class="px-head">
+          <div class="px-title">
+            <span class="chev">▾</span>
+            <span class="px-icon">⧉</span>
+            Personal Memory
+          </div>
+          <div class="px-actions">
+            <span class="px-meta">12 versions · last regenerated 3h ago</span>
+            <span class="px-btn">Regenerate</span>
+            <span class="px-btn">Open ›</span>
+          </div>
+        </div>
+        <div class="px-body">
+          <div class="field">
+            <div class="field-label">Recent summary</div>
+            <div class="field-value">Wrapped Sprint Wave 2026-04-16 (unified ItemsView + persistent queue + conversation versioning). Currently designing the v9 dashboard redesign. Defaulted all model tiers to Gemma 4 31B free.</div>
+          </div>
+          <div class="field-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="field"><div class="field-label">Profiles</div><div class="field-value">Context · Goals · Working style</div></div>
+            <div class="field"><div class="field-label">Total facts</div><div class="field-value">1,231</div></div>
+            <div class="field"><div class="field-label">Sync</div><div class="field-value">Auto on each indexing run</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Files row -->
+    <div class="section-h"><h2>Files</h2></div>
+    <div class="files-row">
+      <div class="head">
+        <div class="title"><span class="chev">▾</span> Uploaded files <span style="color: var(--text-faint); font-weight: 400; margin-left: 4px;">128</span></div>
+        <div class="add">+</div>
+      </div>
+      <!-- Add menu OPEN -->
+      <div class="dropdown-overlay" style="top: 48px; right: 18px; min-width: 240px;">
+        <div class="dd-title">Add to personal index</div>
+        <div class="dd-item"><span class="ico">⬆</span><div>Upload files</div><div class="meta">drag & drop</div></div>
+        <div class="dd-item"><span class="ico">📁</span><div>Upload folder</div></div>
+        <div class="dd-item"><span class="ico">📋</span><div>Paste text or URL</div></div>
+        <div class="dd-divider"></div>
+        <div class="dd-title">Import from</div>
+        <div class="dd-item"><span class="ico" style="color:#1A73E8;">G</span><div>Google Drive</div></div>
+        <div class="dd-item"><span class="ico" style="color:#6C63FF;">C</span><div>Claude conversation</div></div>
+        <div class="dd-item"><span class="ico" style="color:#10a37f;">G</span><div>ChatGPT export</div></div>
+        <div class="dd-item"><span class="ico">⌘</span><div>Capture from web</div><div class="meta">⌘⇧S</div></div>
+      </div>
+      <div class="file-grid">
+        <div class="file-tile"><div class="ftype pdf">PDF</div><div class="meta"><div class="n">Resume-2026.pdf</div><div class="s">312 KB</div></div></div>
+        <div class="file-tile"><div class="ftype doc">DOC</div><div class="meta"><div class="n">Saving plan draft</div><div class="s">44 KB</div></div></div>
+        <div class="file-tile"><div class="ftype xls">XLS</div><div class="meta"><div class="n">Personal budget</div><div class="s">22 KB</div></div></div>
+        <div class="file-tile"><div class="ftype img">IMG</div><div class="meta"><div class="n">Whiteboard-Apr-12.jpg</div><div class="s">2.8 MB</div></div></div>
+        <div class="file-tile"><div class="ftype md">MD</div><div class="meta"><div class="n">workspace-notes.md</div><div class="s">14 KB</div></div></div>
+        <div class="file-tile"><div class="ftype code">TS</div><div class="meta"><div class="n">launch.ts</div><div class="s">9 KB</div></div></div>
+      </div>
+    </div>
+
+    <!-- GWS row -->
+    <div class="files-row">
+      <div class="head">
+        <div class="title"><span class="chev">▾</span> Google Workspace files <span style="color: var(--text-faint); font-weight: 400; margin-left: 4px;">22</span></div>
+        <div class="add">+</div>
+      </div>
+      <div class="file-grid">
+        <div class="file-tile"><div class="ftype gdoc">G</div><div class="meta"><div class="n">2026 Goals</div><div class="s">edited 1h ago</div></div></div>
+        <div class="file-tile"><div class="ftype gsht">G</div><div class="meta"><div class="n">Investments tracker</div><div class="s">edited yesterday</div></div></div>
+        <div class="file-tile"><div class="ftype gsld">G</div><div class="meta"><div class="n">Family trip plan</div><div class="s">edited Apr 14</div></div></div>
+        <div class="file-tile"><div class="ftype gdoc">G</div><div class="meta"><div class="n">Reading log</div><div class="s">edited Apr 09</div></div></div>
+      </div>
+    </div>
+
+    <!-- Three-column source area: Claude | ChatGPT | Third-party apps -->
+    <div class="section-h" style="margin-top: 22px;"><h2>Connected sources</h2></div>
+    <div class="sources">
+
+      <!-- Claude -->
+      <div class="src-col">
+        <div class="head">
+          <div class="logo claude">C</div>
+          <div>
+            <div class="title">Claude</div>
+            <div class="sub">42 chats · 18 artifacts</div>
+          </div>
+          <div class="add-btn">+ New</div>
+        </div>
+        <div class="conv-list">
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">UI redesign exploration <span class="artifact-tag">2 artifacts</span></div><div class="s">Opus 4.7 · 12 turns</div></div><div class="when">2m</div></div>
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">Edge cases for EU DPA</div><div class="s">Sonnet 4.6 · 6 turns</div></div><div class="when">14m</div></div>
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">Drizzle migration plan <span class="artifact-tag">1 artifact</span></div><div class="s">Opus 4.7 · 22 turns</div></div><div class="when">1h</div></div>
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">Refactor follow-dashboard</div><div class="s">Sonnet 4.6 · 8 turns</div></div><div class="when">3h</div></div>
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">Pricing tier strategy</div><div class="s">Opus 4.7 · 14 turns</div></div><div class="when">yesterday</div></div>
+          <div class="conv"><div class="pill purple"></div><div class="body"><div class="t">MCP server debug</div><div class="s">Opus 4.7 · 31 turns</div></div><div class="when">Apr 19</div></div>
+        </div>
+      </div>
+
+      <!-- ChatGPT -->
+      <div class="src-col">
+        <div class="head">
+          <div class="logo chatgpt">G</div>
+          <div>
+            <div class="title">ChatGPT</div>
+            <div class="sub">12 chats imported</div>
+          </div>
+          <div class="add-btn">+ Import</div>
+        </div>
+        <!-- Import menu OPEN -->
+        <div class="dropdown-overlay" style="top: 56px; right: 14px; min-width: 240px;">
+          <div class="dd-title">Import ChatGPT chats</div>
+          <div class="dd-item"><span class="ico">📂</span><div>Upload export.zip</div><div class="meta">.json</div></div>
+          <div class="dd-item"><span class="ico">📋</span><div>Paste single chat URL</div></div>
+          <div class="dd-item"><span class="ico">⌘</span><div>Paste from clipboard</div></div>
+          <div class="dd-divider"></div>
+          <div class="dd-item"><span class="ico">🔗</span><div>Connect ChatGPT account…</div><div class="meta">soon</div></div>
+        </div>
+        <div class="conv-list">
+          <div class="conv"><div class="pill teal"></div><div class="body"><div class="t">Vercel edge config patterns</div><div class="s">GPT-4o · 9 turns</div></div><div class="when">yesterday</div></div>
+          <div class="conv"><div class="pill teal"></div><div class="body"><div class="t">Trip itinerary — Tokyo Apr</div><div class="s">GPT-4o · 18 turns</div></div><div class="when">Apr 18</div></div>
+          <div class="conv"><div class="pill teal"></div><div class="body"><div class="t">React 19 form actions</div><div class="s">GPT-4o · 5 turns</div></div><div class="when">Apr 16</div></div>
+          <div class="conv"><div class="pill teal"></div><div class="body"><div class="t">Bash quoting on Windows</div><div class="s">GPT-4o · 4 turns</div></div><div class="when">Apr 12</div></div>
+        </div>
+      </div>
+
+      <!-- Third-party apps -->
+      <div class="src-col">
+        <div class="head">
+          <div class="title">Third-party apps</div>
+          <div class="sub" style="margin-left: 6px;">2 connected · 4 available</div>
+          <div class="add-btn" style="margin-left: auto;">Browse all</div>
+        </div>
+        <div class="tp-grid">
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #1A73E8;">G</div>
+              <div class="name">Google Drive</div>
+              <div class="status connected">connected</div>
+            </div>
+            <div class="count">22</div>
+            <div class="label">files synced</div>
+          </div>
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #4285F4;">C</div>
+              <div class="name">Chrome ext.</div>
+              <div class="status connected">active</div>
+            </div>
+            <div class="count">87</div>
+            <div class="label">pages captured</div>
+          </div>
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #4A154B;">S</div>
+              <div class="name">Slack</div>
+              <div class="status disabled">connect</div>
+            </div>
+            <div class="last">Index threads & saved messages</div>
+          </div>
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #000;">N</div>
+              <div class="name">Notion</div>
+              <div class="status disabled">connect</div>
+            </div>
+            <div class="last">Pull pages & databases</div>
+          </div>
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #1FB8CD;">P</div>
+              <div class="name">Perplexity</div>
+              <div class="status disabled">connect</div>
+            </div>
+            <div class="last">Research history</div>
+          </div>
+          <div class="tp-tile">
+            <div class="top">
+              <div class="icon" style="background: #5E6AD2;">L</div>
+              <div class="name">Linear</div>
+              <div class="status disabled">connect</div>
+            </div>
+            <div class="last">Issues & projects</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="section-h"><h2>Recent activity</h2><span class="more">View all ›</span></div>
+    <div class="recents">
+      <div class="activity"><div class="src-pill claude">claude</div><div class="text">New chat saved · <span class="target">UI redesign exploration</span></div><div class="when">2m</div></div>
+      <div class="activity"><div class="src-pill upload">upload</div><div class="text">Uploaded <span class="target">Resume-2026.pdf</span></div><div class="when">1h</div></div>
+      <div class="activity"><div class="src-pill gws">google</div><div class="text">Edited <span class="target">2026 Goals</span></div><div class="when">1h</div></div>
+      <div class="activity"><div class="src-pill chatgpt">chatgpt</div><div class="text">Imported chat · <span class="target">Vercel edge config patterns</span></div><div class="when">yesterday</div></div>
+      <div class="activity"><div class="src-pill claude">claude</div><div class="text">Artifact materialized in <span class="target">Drizzle migration plan</span></div><div class="when">yesterday</div></div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

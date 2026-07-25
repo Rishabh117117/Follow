@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Project Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #FAFAF9;
+    --panel: #FFFFFF;
+    --border: #EAEAE8;
+    --border-strong: #D7D7D4;
+    --text: #1C1C1B;
+    --text-muted: #6B6B68;
+    --text-faint: #9B9B97;
+    --accent: #6C63FF;
+    --green: #10B981;
+    --teal: #10a37f;
+    --cyan: #0EA5E9;
+    --orange: #F59E0B;
+    --purple: #6C63FF;
+    --pink: #EC4899;
+  }
+  body { font-family: -apple-system, "Inter", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.45; overflow: hidden; }
+  .app { display: flex; height: 100vh; }
+
+  /* === Sidebar === */
+  .sidebar { width: 240px; background: #F5F4F1; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px; flex-shrink: 0; }
+  .brand { font-size: 16px; font-weight: 600; padding: 4px 8px 16px; }
+  .index-pick { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; font-size: 12px; }
+  .index-pick .swatch { width: 18px; height: 18px; background: linear-gradient(135deg, #6C63FF, #EC4899); border-radius: 5px; }
+  .index-pick .name { flex: 1; font-weight: 500; }
+  .index-pick .chev { color: var(--text-faint); }
+  .nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); padding: 12px 10px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text); }
+  .nav-item.active { background: #E9E7E1; font-weight: 500; }
+  .nav-item .ico { width: 14px; text-align: center; color: var(--text-muted); font-size: 11px; }
+  .nav-item .count { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+  .stats { margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
+  .stats .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .profile { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 8px; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #FBBF24, #F59E0B); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 11px; }
+  .profile .name { font-size: 12px; font-weight: 500; }
+
+  /* === Main === */
+  .main { flex: 1; overflow-y: auto; padding: 32px 48px 80px; }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .project-title { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .project-title .icon { width: 36px; height: 36px; background: linear-gradient(135deg, #6C63FF, #EC4899); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; }
+  .project-title h1 { font-size: 22px; font-weight: 600; }
+  .project-title .star { color: var(--text-faint); cursor: pointer; }
+  .project-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 28px; padding-left: 48px; }
+
+  .section-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-h h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-faint); font-weight: 600; }
+  .section-h .more { font-size: 11px; color: var(--text-muted); cursor: pointer; }
+
+  /* Project Index — stacked expanded panels */
+  .index-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .px-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .px-head { display: flex; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); background: #FBFAF7; }
+  .px-title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; flex: 1; }
+  .px-title .chev { color: var(--text-faint); font-size: 12px; }
+  .px-icon { font-size: 13px; }
+  .px-actions { display: flex; align-items: center; gap: 12px; }
+  .px-meta { font-size: 11px; color: var(--text-faint); }
+  .px-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; background: white; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .px-btn:hover { background: var(--bg); }
+  .px-body { padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); font-weight: 600; }
+  .field-value { font-size: 13px; color: var(--text); line-height: 1.55; }
+  .field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .field-grid .field-value { font-size: 12px; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .status-dot.green { background: var(--green); }
+  .bullets { padding-left: 18px; font-size: 13px; color: var(--text); }
+  .bullets li { padding: 2px 0; }
+  .scope-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scope-tag { padding: 4px 10px; border-radius: 100px; background: #F1F0EC; font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); cursor: pointer; }
+  .boundary-list { display: flex; flex-direction: column; gap: 4px; }
+  .boundary { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; padding: 7px 10px; background: #FBFAF7; border: 1px solid var(--border); border-radius: 6px; }
+  .b-dim { color: var(--accent); font-weight: 600; min-width: 90px; }
+  .b-op { color: var(--text-faint); padding: 0 4px; min-width: 60px; }
+  .b-val { color: var(--text); flex: 1; }
+  .b-x { color: var(--text-faint); cursor: pointer; padding: 0 4px; }
+  .b-x:hover { color: #DC2626; }
+  .boundary-add { font-family: -apple-system, sans-serif; color: var(--text-muted); border-style: dashed; cursor: pointer; justify-content: center; padding: 7px 10px; }
+  .boundary-add:hover { background: #F1F0EC; color: var(--text); }
+
+  /* Collapsible sub-stack (used inside Scope) */
+  .sub-stack { display: flex; flex-direction: column; gap: 6px; }
+  .sub-card { border: 1px solid var(--border); border-radius: 8px; background: #FBFAF7; overflow: hidden; }
+  .sub-card.open { background: white; }
+  .sub-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; }
+  .sub-card.open .sub-head { border-bottom: 1px solid var(--border); }
+  .sub-head:hover { background: #F5F4F1; }
+  .sub-card.open .sub-head:hover { background: #FBFAF7; }
+  .sub-head .chev { color: var(--text-faint); font-size: 11px; transition: transform 0.15s; }
+  .sub-icon { font-size: 13px; width: 16px; text-align: center; }
+  .sub-title { font-size: 12px; font-weight: 600; }
+  .sub-body { padding: 14px 16px 16px; }
+
+  /* Live/Static segmented control */
+  .seg { display: flex; background: #F1F0EC; border-radius: 6px; padding: 2px; }
+  .seg-opt { padding: 3px 10px; font-size: 11px; border-radius: 4px; cursor: pointer; color: var(--text-muted); }
+  .seg-opt.active { background: white; color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+
+  /* Lifecycle badge */
+  .lifecycle-badge { font-size: 10px; padding: 2px 8px; border-radius: 100px; margin-left: 4px; font-weight: 500; }
+  .lifecycle-badge.live { background: #DCFCE7; color: #047857; }
+  .lifecycle-badge.active { background: #DBEAFE; color: #1D4ED8; }
+  .lifecycle-badge.paused { background: #FEF3C7; color: #B45309; }
+  .lifecycle-badge.unscoped { background: #F1F0EC; color: var(--text-muted); }
+
+  /* Natural-language input */
+  .nl-input { background: #FBFAF7; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .nl-text { font-size: 13px; color: var(--text); line-height: 1.55; padding-bottom: 10px; border-bottom: 1px dashed var(--border); margin-bottom: 10px; }
+  .nl-actions { display: flex; align-items: center; gap: 12px; }
+  .px-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* JSON code block */
+  .json-block { background: #1C1C1B; color: #E5E5E2; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; padding: 14px 16px; border-radius: 8px; line-height: 1.55; overflow-x: auto; white-space: pre; }
+  .memory-sections { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .mem-section { padding: 10px 12px; background: #FBFAF7; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+  .mem-section:hover { background: #F1F0EC; }
+  .ms-name { font-size: 12px; font-weight: 500; }
+  .ms-count { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+  /* Open dropdown overlays */
+  .dropdown-overlay { position: absolute; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06); padding: 6px; z-index: 50; min-width: 220px; }
+  .dd-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); padding: 8px 10px 4px; font-weight: 600; }
+  .dd-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .dd-item:hover { background: #F5F4F1; }
+  .dd-item.checked { background: #F1F0EC; }
+  .dd-item .swatch-sm { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+  .dd-item .ico { width: 14px; text-align: center; color: var(--text-muted); flex-shrink: 0; }
+  .dd-item .meta { margin-left: auto; font-size: 10px; color: var(--text-faint); }
+  .dd-divider { height: 1px; background: var(--border); margin: 4px 6px; }
+  .sidebar { position: relative; }
+  .files-row { position: relative; }
+
+  /* Files / GWS rows */
+  .files-row { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 14px; }
+  .files-row .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .files-row .head .title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
+  .files-row .head .title .chev { color: var(--text-faint); cursor: pointer; }
+  .files-row .head .actions { display: flex; gap: 6px; }
+  .files-row .add { width: 26px; height: 26px; border-radius: 6px; background: #F1F0EC; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); border: 1px dashed var(--border-strong); }
+  .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .file-tile { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #FBFAF7; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; min-width: 0; }
+  .file-tile:hover { background: #F5F4F1; }
+  .file-tile .ftype { width: 28px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+  .file-tile .meta { min-width: 0; }
+  .file-tile .meta .n { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-tile .meta .s { font-size: 10px; color: var(--text-faint); }
+  .ftype.pdf { background: #DC2626; }
+  .ftype.doc { background: #2563EB; }
+  .ftype.xls { background: #059669; }
+  .ftype.img { background: #DB2777; }
+  .ftype.md  { background: #525252; }
+  .ftype.code{ background: #7C3AED; }
+  .ftype.gdoc{ background: #1A73E8; }
+  .ftype.gsht{ background: #0F9D58; }
+  .ftype.gsld{ background: #F4B400; }
+
+  /* Per-user cards */
+  .users-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .user-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; }
+  .user-card:hover { border-color: var(--border-strong); }
+  .user-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .user-card .av { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
+  .user-card .role { font-size: 10px; color: var(--text-faint); }
+  .user-card .uname { font-size: 13px; font-weight: 500; }
+  .user-card .stats-mini { display: flex; gap: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; }
+  .user-card .stats-mini b { display: block; color: var(--text); font-size: 14px; font-weight: 600; }
+  .user-card .stats-mini span { color: var(--text-muted); }
+  .user-card .recent { margin-top: 10px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .user-card .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .user-card.add-card { border: 1px dashed var(--border-strong); background: transparent; display: flex; align-items: center; justify-content: center; min-height: 124px; color: var(--text-muted); }
+
+  /* Recents (activity feed) */
+  .recents { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 0; }
+  .activity { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+  .activity:last-child { border-bottom: none; }
+  .activity .av { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 600; }
+  .activity .text { flex: 1; font-size: 12px; }
+  .activity .text b { font-weight: 600; }
+  .activity .text .target { color: var(--accent); }
+  .activity .src { font-size: 10px; padding: 2px 8px; border-radius: 100px; }
+  .activity .src.claude { background: #EFEAFF; color: var(--purple); }
+  .activity .src.gws { background: #E0F2FE; color: var(--cyan); }
+  .activity .src.upload { background: #FEF3C7; color: var(--orange); }
+  .activity .src.local { background: #DCFCE7; color: var(--green); }
+  .activity .when { font-size: 11px; color: var(--text-faint); width: 70px; text-align: right; }
+
+  .av.u1 { background: #6C63FF; }
+  .av.u2 { background: #10B981; }
+  .av.u3 { background: #F59E0B; }
+  .av.u4 { background: #EC4899; }
+
+  .annotate { position: fixed; right: 24px; top: 24px; background: #FFF8E1; border: 1px dashed #F59E0B; padding: 12px 14px; border-radius: 8px; max-width: 280px; font-size: 11px; color: #78350F; z-index: 99; }
+  .annotate b { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="annotate"><b>Mockup — Project Dashboard</b>Maps to wireframe 1. Sidebar = existing DashSidebar (untouched). Main area is fully new. Yellow chips = data layer ⚠️ (no space_members table yet).</div>
+
+<div class="app">
+  <!-- ======= SIDEBAR (unchanged from current) ======= -->
+  <aside class="sidebar">
+    <div class="brand">Follow</div>
+    <div class="index-pick">
+      <div class="swatch"></div>
+      <div class="name">Acme Q3 Launch</div>
+      <div class="chev">▾</div>
+    </div>
+    <!-- Index picker dropdown OPEN -->
+    <div class="dropdown-overlay" style="top: 86px; left: 250px; min-width: 260px;">
+      <div class="dd-title">Switch index</div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#FBBF24,#F59E0B);"></div><div>Personal</div><div class="meta">312</div></div>
+      <div class="dd-divider"></div>
+      <div class="dd-title">Projects</div>
+      <div class="dd-item checked"><div class="swatch-sm" style="background: linear-gradient(135deg,#6C63FF,#EC4899);"></div><div>Acme Q3 Launch</div><div class="meta">128</div></div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#10B981,#0EA5E9);"></div><div>Workspace App</div><div class="meta">94</div></div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#EC4899,#F59E0B);"></div><div>Demo Profile UX</div><div class="meta">37</div></div>
+      <div class="dd-item"><div class="swatch-sm" style="background: linear-gradient(135deg,#525252,#1F1F1F);"></div><div>Personal Notes</div><div class="meta">12</div></div>
+      <div class="dd-divider"></div>
+      <div class="dd-item"><span class="ico">+</span><div>New project…</div></div>
+      <div class="dd-item"><span class="ico">⚙</span><div>Manage indexes</div></div>
+    </div>
+
+    <div class="nav-section">Project</div>
+    <div class="nav-item active"><span class="ico">◉</span> Dashboard</div>
+    <div class="nav-item"><span class="ico">◫</span> All Items <span class="count">128</span></div>
+    <div class="nav-item"><span class="ico">◯</span> Conversations <span class="count">42</span></div>
+    <div class="nav-item"><span class="ico">◫</span> Files <span class="count">73</span></div>
+    <div class="nav-item"><span class="ico">◈</span> Facts <span class="count">421</span></div>
+
+    <div class="nav-section">Knowledge</div>
+    <div class="nav-item"><span class="ico">▤</span> Notebooks <span class="count">3</span></div>
+    <div class="nav-item"><span class="ico">⧉</span> Memory <span class="count">6</span></div>
+
+    <div class="stats">
+      <div class="row"><span>Facts</span><span>421</span></div>
+      <div class="row"><span>Files</span><span>73</span></div>
+      <div class="row"><span>Chats</span><span>42</span></div>
+    </div>
+    <div class="profile">
+      <div class="avatar">D</div>
+      <div class="name">Darshul</div>
+    </div>
+  </aside>
+
+  <!-- ======= MAIN ======= -->
+  <main class="main">
+    <div class="breadcrumb">Acme Workspace · Projects</div>
+    <div class="project-title">
+      <div class="icon">A</div>
+      <h1>Acme Q3 Launch</h1>
+      <span class="star">☆</span>
+    </div>
+    <div class="project-meta">Created Mar 12 · 4 members · last activity 14m ago</div>
+
+    <!-- Project Index: Description + Scope + Memory all expanded -->
+    <div class="section-h"><h2>Project Index</h2><span class="more">Edit ›</span></div>
+    <div class="index-stack">
+
+      <!-- DESCRIPTION panel -->
+      <div class="px-card">
+        <div class="px-head">
+          <div class="px-title">
+            <span class="chev">▾</span>
+            <span class="px-icon">📝</span>
+            Description
+          </div>
+          <div class="px-actions">
+            <span class="px-meta">edited 14m ago by you</span>
+            <span class="px-btn">Edit</span>
+          </div>
+        </div>
+        <div class="px-body">
+          <div class="field">
+            <div class="field-label">Project name</div>
+            <div class="field-value">Acme Q3 Launch</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Summary</div>
+            <div class="field-value">Coordinate the Q3 product launch across marketing, engineering, and partnerships. Track decisions about pricing tiers, regional rollout sequencing, and beta partner commitments.</div>
+          </div>
+          <div class="field-grid">
+            <div class="field"><div class="field-label">Owner</div><div class="field-value">Darshul Rishabh</div></div>
+            <div class="field"><div class="field-label">Created</div><div class="field-value">Mar 12, 2026</div></div>
+            <div class="field"><div class="field-label">Visibility</div><div class="field-value">Workspace · 4 members</div></div>
+            <div class="field"><div class="field-label">Status</div><div class="field-value"><span class="status-dot green"></span> Active</div></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Goals</div>
+            <ul class="bullets">
+              <li>Ship pricing & paywall by Aug 28</li>
+              <li>Sign 5 beta partners before public launch</li>
+              <li>Pass EU DPA review by Sep 7</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCOPE panel — real pipeline (visual / NL / JSON) -->
+      <div class="px-card">
+        <div class="px-head">
+          <div class="px-title">
+            <span class="chev">▾</span>
+            <span class="px-icon">🎯</span>
+            Scope
+            <span class="lifecycle-badge live">● Live</span>
+          </div>
+          <div class="px-actions">
+            <span class="px-meta">scope_id: pricing_q3_2026_04_23 · 5 boundaries</span>
+            <span class="px-btn">Save preset</span>
+            <span class="px-btn">Pause</span>
+          </div>
+        </div>
+        <div class="px-body">
+          <!-- Mode toolbar -->
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span class="px-meta">3 input modes — open any to edit</span>
+            <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+              <span class="px-meta">Mode</span>
+              <div class="seg">
+                <div class="seg-opt active">Live</div>
+                <div class="seg-opt">Static</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Collapsible-stack of input modes -->
+          <div class="sub-stack">
+            <!-- Visual builder (open) -->
+            <div class="sub-card open">
+              <div class="sub-head">
+                <span class="chev">▾</span>
+                <span class="sub-icon">⊞</span>
+                <span class="sub-title">Visual builder</span>
+                <span class="px-meta">5 boundaries</span>
+              </div>
+              <div class="sub-body">
+                <div class="boundary-list">
+                  <div class="boundary"><span class="b-dim">topic</span><span class="b-op">in</span><span class="b-val">["pricing", "eu-rollout", "beta-partners", "paywall"]</span><span class="b-x">×</span></div>
+                  <div class="boundary"><span class="b-dim">confidence</span><span class="b-op">gte</span><span class="b-val">0.7</span><span class="b-x">×</span></div>
+                  <div class="boundary"><span class="b-dim">time</span><span class="b-op">within</span><span class="b-val">{ relative, days: 30 }</span><span class="b-x">×</span></div>
+                  <div class="boundary"><span class="b-dim">contributor</span><span class="b-op">in</span><span class="b-val">[Darshul, Maya, Jordan]</span><span class="b-x">×</span></div>
+                  <div class="boundary"><span class="b-dim">source_tool</span><span class="b-op">excludes</span><span class="b-val">["chat_artifact:draft"]</span><span class="b-x">×</span></div>
+                  <div class="boundary boundary-add">+ Add boundary</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Natural language (open) -->
+            <div class="sub-card open">
+              <div class="sub-head">
+                <span class="chev">▾</span>
+                <span class="sub-icon">✨</span>
+                <span class="sub-title">Natural language</span>
+                <span class="px-meta">parses via MICRO_MODEL (Haiku)</span>
+              </div>
+              <div class="sub-body">
+                <div class="nl-input">
+                  <div class="nl-text">Show only high-confidence facts from the last 30 days about pricing, EU rollout, beta partners, or the paywall — from Darshul, Maya, or Jordan. Skip Claude draft artifacts.</div>
+                  <div class="nl-actions">
+                    <span class="px-btn primary">↻ Re-parse</span>
+                    <span class="px-meta">parsed 14m ago · 5/5 boundaries · 0 warnings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- JSON (collapsed by default — shown open here so you can see the shape) -->
+            <div class="sub-card open">
+              <div class="sub-head">
+                <span class="chev">▾</span>
+                <span class="sub-icon">{ }</span>
+                <span class="sub-title">JSON</span>
+                <span class="px-meta">serialized — what POSTs to /api/scope</span>
+                <span style="margin-left: auto;" class="px-btn">Copy</span>
+              </div>
+              <div class="sub-body">
+<pre class="json-block">{
+  "scope_id": "pricing_q3_2026_04_23_14_30",
+  "name": "Pricing & launch — last 30d",
+  "mode": "live",
+  "persists_until": "session_end",
+  "boundaries": [
+    { "dimension": "topic", "op": "in", "values": ["pricing", "eu-rollout", "beta-partners", "paywall"] },
+    { "dimension": "confidence", "op": "gte", "value": 0.7 },
+    { "dimension": "time", "op": "within", "window": { "type": "relative", "days": 30 } },
+    { "dimension": "contributor", "op": "in", "values": ["darshul", "maya", "jordan"] },
+    { "dimension": "source_tool", "op": "excludes", "values": ["chat_artifact:draft"] }
+  ]
+}</pre>
+              </div>
+            </div>
+
+            <!-- Presets (collapsed example) -->
+            <div class="sub-card">
+              <div class="sub-head">
+                <span class="chev" style="transform: rotate(-90deg); display: inline-block;">▾</span>
+                <span class="sub-icon">★</span>
+                <span class="sub-title">Presets</span>
+                <span class="px-meta">3 saved · click to load</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="field"><div class="field-label">Estimated facts</div><div class="field-value">421 / 1,231</div></div>
+            <div class="field"><div class="field-label">Matches</div><div class="field-value">73 files · 28 chats</div></div>
+            <div class="field"><div class="field-label">Conflicts</div><div class="field-value" style="color: var(--green);">● none</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEMORY panel -->
+      <div class="px-card">
+        <div class="px-head">
+          <div class="px-title">
+            <span class="chev">▾</span>
+            <span class="px-icon">⧉</span>
+            Memory
+          </div>
+          <div class="px-actions">
+            <span class="px-meta">v14 · regenerated 22m ago</span>
+            <span class="px-btn">Regenerate</span>
+            <span class="px-btn">Open ›</span>
+          </div>
+        </div>
+        <div class="px-body">
+          <div class="field">
+            <div class="field-label">Recent Project Memory Summary <span style="color: var(--text-faint); font-weight: 400;">(auto-digested)</span></div>
+            <div class="field-value">Pricing locked at $29 / $79 tiers (decided 2d ago). EU rollout pushed to Sep 14 pending DPA review. 3 beta partners signed; Linear and Vercel still pending. Marketing site refresh in flight — Maya leading copy, Jordan reviewing.</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Sections</div>
+            <div class="memory-sections">
+              <div class="mem-section">
+                <div class="ms-name">Decisions</div>
+                <div class="ms-count">14 entries</div>
+              </div>
+              <div class="mem-section">
+                <div class="ms-name">Open questions</div>
+                <div class="ms-count">6 entries</div>
+              </div>
+              <div class="mem-section">
+                <div class="ms-name">Stakeholders</div>
+                <div class="ms-count">9 entries</div>
+              </div>
+              <div class="mem-section">
+                <div class="ms-name">Risks</div>
+                <div class="ms-count">4 entries</div>
+              </div>
+            </div>
+          </div>
+          <div class="field-grid">
+            <div class="field"><div class="field-label">Versions</div><div class="field-value">14 · last edit by Maya 1h ago</div></div>
+            <div class="field"><div class="field-label">Sync</div><div class="field-value">Auto on each indexing run</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Files row -->
+    <div class="section-h"><h2>Files</h2></div>
+    <div class="files-row">
+      <div class="head">
+        <div class="title"><span class="chev">▾</span> Uploaded files <span style="color: var(--text-faint); font-weight: 400; margin-left: 4px;">42</span></div>
+        <div class="actions"><div class="add">+</div></div>
+      </div>
+      <!-- Add menu OPEN -->
+      <div class="dropdown-overlay" style="top: 48px; right: 18px; min-width: 240px;">
+        <div class="dd-title">Add to project</div>
+        <div class="dd-item"><span class="ico">⬆</span><div>Upload files</div><div class="meta">drag & drop</div></div>
+        <div class="dd-item"><span class="ico">📁</span><div>Upload folder</div></div>
+        <div class="dd-item"><span class="ico">📋</span><div>Paste text or URL</div></div>
+        <div class="dd-divider"></div>
+        <div class="dd-title">Import from</div>
+        <div class="dd-item"><span class="ico" style="color:#1A73E8;">G</span><div>Google Drive</div></div>
+        <div class="dd-item"><span class="ico" style="color:#6C63FF;">C</span><div>Claude conversation</div></div>
+        <div class="dd-item"><span class="ico" style="color:#10a37f;">G</span><div>ChatGPT export</div></div>
+        <div class="dd-item"><span class="ico">⌘</span><div>Capture from web</div><div class="meta">⌘⇧S</div></div>
+      </div>
+      <div class="file-grid">
+        <div class="file-tile"><div class="ftype pdf">PDF</div><div class="meta"><div class="n">Pricing-deck-v3.pdf</div><div class="s">2.4 MB</div></div></div>
+        <div class="file-tile"><div class="ftype doc">DOC</div><div class="meta"><div class="n">DPA-redlines.docx</div><div class="s">112 KB</div></div></div>
+        <div class="file-tile"><div class="ftype xls">XLS</div><div class="meta"><div class="n">Beta-partner-tracker</div><div class="s">38 KB</div></div></div>
+        <div class="file-tile"><div class="ftype img">IMG</div><div class="meta"><div class="n">Hero-mock-final.png</div><div class="s">1.1 MB</div></div></div>
+        <div class="file-tile"><div class="ftype md">MD</div><div class="meta"><div class="n">launch-runbook.md</div><div class="s">8 KB</div></div></div>
+        <div class="file-tile"><div class="ftype code">JS</div><div class="meta"><div class="n">paywall.config.ts</div><div class="s">2 KB</div></div></div>
+      </div>
+    </div>
+
+    <!-- GWS row -->
+    <div class="files-row">
+      <div class="head">
+        <div class="title"><span class="chev">▾</span> Google Workspace files <span style="color: var(--text-faint); font-weight: 400; margin-left: 4px;">8</span></div>
+        <div class="actions"><div class="add">+</div></div>
+      </div>
+      <div class="file-grid">
+        <div class="file-tile"><div class="ftype gdoc">G</div><div class="meta"><div class="n">Q3 launch plan</div><div class="s">edited 2h ago</div></div></div>
+        <div class="file-tile"><div class="ftype gsht">G</div><div class="meta"><div class="n">Pricing model 2026</div><div class="s">edited 1d ago</div></div></div>
+        <div class="file-tile"><div class="ftype gsld">G</div><div class="meta"><div class="n">Investor narrative</div><div class="s">edited Apr 18</div></div></div>
+        <div class="file-tile"><div class="ftype gdoc">G</div><div class="meta"><div class="n">Beta partner brief</div><div class="s">edited Apr 17</div></div></div>
+      </div>
+    </div>
+
+    <!-- Per-user cards -->
+    <div class="section-h" style="margin-top: 28px;"><h2>Members <span style="color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0;">· activity in this project</span></h2></div>
+    <div class="users-row">
+      <div class="user-card">
+        <div class="head">
+          <div class="av u1">D</div>
+          <div>
+            <div class="uname">Darshul Rishabh</div>
+            <div class="role">Owner · you</div>
+          </div>
+        </div>
+        <div class="stats-mini">
+          <div><b>18</b><span>Chats</span></div>
+          <div><b>34</b><span>Files / artifacts</span></div>
+        </div>
+        <div class="recent"><div class="dot"></div> active 2m ago</div>
+      </div>
+      <div class="user-card">
+        <div class="head">
+          <div class="av u2">M</div>
+          <div>
+            <div class="uname">Maya Lin</div>
+            <div class="role">Editor</div>
+          </div>
+        </div>
+        <div class="stats-mini">
+          <div><b>11</b><span>Chats</span></div>
+          <div><b>12</b><span>Files / artifacts</span></div>
+        </div>
+        <div class="recent"><div class="dot"></div> active 14m ago</div>
+      </div>
+      <div class="user-card">
+        <div class="head">
+          <div class="av u3">J</div>
+          <div>
+            <div class="uname">Jordan Park</div>
+            <div class="role">Viewer</div>
+          </div>
+        </div>
+        <div class="stats-mini">
+          <div><b>5</b><span>Chats</span></div>
+          <div><b>3</b><span>Files / artifacts</span></div>
+        </div>
+        <div class="recent" style="color: var(--text-faint);">last active 2d ago</div>
+      </div>
+      <div class="user-card add-card">+ Invite member</div>
+    </div>
+
+    <!-- Recents -->
+    <div class="section-h"><h2>Recents</h2><span class="more">View activity ›</span></div>
+    <div class="recents">
+      <div class="activity">
+        <div class="av u1">D</div>
+        <div class="text"><b>You</b> updated <span class="target">Pricing-deck-v3.pdf</span></div>
+        <div class="src upload">upload</div>
+        <div class="when">2m ago</div>
+      </div>
+      <div class="activity">
+        <div class="av u2">M</div>
+        <div class="text"><b>Maya</b> saved Claude conversation <span class="target">Edge cases for EU DPA</span></div>
+        <div class="src claude">claude</div>
+        <div class="when">14m ago</div>
+      </div>
+      <div class="activity">
+        <div class="av u1">D</div>
+        <div class="text"><b>You</b> edited <span class="target">Q3 launch plan</span></div>
+        <div class="src gws">google</div>
+        <div class="when">1h ago</div>
+      </div>
+      <div class="activity">
+        <div class="av u3">J</div>
+        <div class="text"><b>Jordan</b> added 4 facts to <span class="target">Beta partner tracker</span></div>
+        <div class="src local">follow</div>
+        <div class="when">3h ago</div>
+      </div>
+      <div class="activity">
+        <div class="av u2">M</div>
+        <div class="text"><b>Maya</b> regenerated project memory · v14</div>
+        <div class="src local">memory</div>
+        <div class="when">22m ago</div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
