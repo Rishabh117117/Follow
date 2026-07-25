@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
@@ -14,7 +15,14 @@ vi.mock('../../middleware/auth', () => ({
   }),
 }))
 
-const { mockSet, mockDelete, mockInsertReturning, mockSelectRecord, mockSelectRawFile, mockSelectFactCount } = vi.hoisted(() => ({
+const {
+  mockSet,
+  mockDelete,
+  mockInsertReturning,
+  mockSelectRecord,
+  mockSelectRawFile,
+  mockSelectFactCount,
+} = vi.hoisted(() => ({
   mockSet: vi.fn(),
   mockDelete: vi.fn(),
   mockInsertReturning: vi.fn(),
@@ -44,8 +52,7 @@ vi.mock('../../db/index', () => {
   const makeThenableChain = (value: () => unknown[]) => {
     const chain: any = {
       limit: vi.fn(() => Promise.resolve(value())),
-      then: (resolve: any, reject: any) =>
-        Promise.resolve(value()).then(resolve, reject),
+      then: (resolve: any, reject: any) => Promise.resolve(value()).then(resolve, reject),
     }
     return chain
   }
@@ -94,6 +101,18 @@ vi.mock('../../db/schema/raw-files', () => ({
 vi.mock('../../db/schema/chat', () => ({
   chatConversations: { id: 'id' },
   chatMessages: { conversationId: 'conversationId' },
+}))
+
+const { mockTombstoneSource, mockTombstoneRecord } = vi.hoisted(() => ({
+  mockTombstoneSource: vi.fn(async () => ({ records: 2, edges: 0, states: 0 })),
+  mockTombstoneRecord: vi.fn(async () => ({ edges: 0, states: 0 })),
+}))
+
+// deleteIndexItem dispatches to the tombstone service (which soft-deletes in
+// a db.transaction); the unit test asserts the dispatch, not the internals.
+vi.mock('../../services/pipeline/tombstone', () => ({
+  tombstoneSource: mockTombstoneSource,
+  tombstoneRecord: mockTombstoneRecord,
 }))
 
 vi.mock('../../services/raw-file-store', () => ({
@@ -167,21 +186,23 @@ describe('PATCH /:id/unhide', () => {
 })
 
 describe('DELETE /:id', () => {
-  it('removes record and cascades to raw file', async () => {
+  it('removes record and soft-deletes the raw file', async () => {
     const res = await mkApp().request('/rec-1', { method: 'DELETE' })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.deleted).toBe(true)
     // raw file soft-delete: update set deletedAt
     expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ deletedAt: expect.any(Date) }))
-    // records deleted
-    expect(mockDelete).toHaveBeenCalled()
   })
 
-  it('cascades to child fact records (by sourceFileId)', async () => {
+  it('cascades to every record sharing the source via tombstoneSource', async () => {
     await mkApp().request('/rec-1', { method: 'DELETE' })
-    // delete called at least twice: once for children (by sourceFileId), once for record itself
-    expect(mockDelete.mock.calls.length).toBeGreaterThanOrEqual(2)
+    // The v5.1 hard-delete cascade became audit-preserving tombstones: one
+    // tombstoneSource call sweeps all records with this sourceFileId.
+    expect(mockTombstoneSource).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceFileId: 'raw-file-uuid-1', reason: 'user' })
+    )
+    expect(mockTombstoneRecord).not.toHaveBeenCalled()
   })
 })
 
@@ -213,11 +234,13 @@ describe('POST /bulk', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.affected).toBe(2)
+    expect(mockTombstoneSource).toHaveBeenCalledTimes(2)
   })
 
   it('rejects more than 50 IDs', async () => {
-    const ids = Array.from({ length: 51 }, (_, i) =>
-      `${String(i).padStart(8, '0')}-1111-1111-1111-111111111111`
+    const ids = Array.from(
+      { length: 51 },
+      (_, i) => `${String(i).padStart(8, '0')}-1111-1111-1111-111111111111`
     )
     const res = await mkApp().request('/bulk', {
       method: 'POST',
@@ -350,12 +373,10 @@ describe('Hidden filter behavior', () => {
     // The executor is called by the existing /api/index route; verify the
     // `hidden=false` predicate is wired by importing the executor's module
     // source and checking the conditional.
+    const path = await import('path')
     const src = await import('fs').then((fs) =>
       fs.promises.readFile(
-        require('path').resolve(
-          __dirname,
-          '../../services/semantic-index/query-executor.ts'
-        ),
+        path.resolve(__dirname, '../../services/semantic-index/query-executor.ts'),
         'utf-8'
       )
     )

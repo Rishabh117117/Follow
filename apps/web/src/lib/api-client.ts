@@ -19,8 +19,36 @@ const DEV_HEADERS = {
   'x-workspace-id': DEV_WORKSPACE.id,
 }
 
+// AUTH-FIX-1: in-memory cache of the API bearer token minted by the same-origin
+// /api/auth/api-token route (which reads the NextAuth session server-side and
+// signs it with AUTH_API_SECRET). Re-minted silently when within REMINT_SKEW_MS
+// of expiry — the mint is cookie-authed + same-origin, so it's invisible.
+interface ApiTokenBundle {
+  token: string
+  expiresAt: number
+  activeWorkspaceId: string | null
+}
+let tokenCache: ApiTokenBundle | null = null
+const REMINT_SKEW_MS = 5 * 60 * 1000
+
+async function getApiToken(): Promise<ApiTokenBundle | null> {
+  if (tokenCache && tokenCache.expiresAt - Date.now() > REMINT_SKEW_MS) return tokenCache
+  try {
+    const res = await fetch('/api/auth/api-token', { credentials: 'include' })
+    if (!res.ok) {
+      tokenCache = null
+      return null
+    }
+    tokenCache = (await res.json()) as ApiTokenBundle
+    return tokenCache
+  } catch {
+    tokenCache = null
+    return null
+  }
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  // Dev mode: use hardcoded dev user headers
+  // Dev mode: hardcoded dev user headers (unchanged — preserves local ergonomics).
   if (DEV_BYPASS_AUTH) {
     // Even in dev mode, try to extract workspace ID from URL for correct routing
     if (typeof window !== 'undefined') {
@@ -33,28 +61,24 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   if (typeof window === 'undefined') return {}
-  const { getSession } = await import('next-auth/react')
-  const session = await getSession()
 
-  if (session?.user?.id) {
-    return {
-      'x-user-id': session.user.id,
-      'x-workspace-id': session.user.activeWorkspaceId ?? '',
-    }
+  // AUTH-FIX-1: authenticate with a VERIFIED bearer token — the API derives
+  // identity from the token's signature, never from the forgeable x-user-id
+  // header. If no token can be minted (not signed in / mint failed), send no
+  // auth headers and let the API return 401. NO dev-user fallback here.
+  const bundle = await getApiToken()
+  if (!bundle) return {}
+
+  const headers: Record<string, string> = { Authorization: `Bearer ${bundle.token}` }
+  // x-workspace-id stays a request input (the membership guard is the next
+  // sprint). Prefer the mint route's server-derived workspace; fall back to URL.
+  let ws = bundle.activeWorkspaceId ?? ''
+  if (!ws && typeof window !== 'undefined') {
+    const wsMatch = window.location.pathname.match(/\/workspace\/([0-9a-f-]{36})/)
+    if (wsMatch) ws = wsMatch[1]!
   }
-
-  // No session but on a workspace page — extract workspace ID from URL
-  // Use dev user ID as fallback so API auth middleware accepts the request
-  const wsMatch = window.location.pathname.match(/\/workspace\/([0-9a-f-]{36})/)
-  if (wsMatch) {
-    return {
-      'x-user-id': DEV_USER.id,
-      'x-workspace-id': wsMatch[1]!,
-    }
-  }
-
-  // Final fallback: dev headers so API doesn't reject
-  return DEV_HEADERS
+  if (ws) headers['x-workspace-id'] = ws
+  return headers
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {

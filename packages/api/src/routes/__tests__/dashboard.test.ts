@@ -4,7 +4,10 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const html = readFileSync(resolve(__dirname, '..', '..', '..', '..', '..', 'scripts', 'dashboard.html'), 'utf-8')
+const html = readFileSync(
+  resolve(__dirname, '..', '..', '..', '..', '..', 'scripts', 'dashboard.html'),
+  'utf-8'
+)
 
 describe('dashboard.html (DC-1)', () => {
   it('contains all 7 tab labels', () => {
@@ -40,10 +43,10 @@ describe('dashboard.html (DC-1)', () => {
     expect(html).toContain('toolNames')
   })
 
-  it('users table renders 3 mock users', () => {
-    expect(html).toContain('Rishabh Salian')
-    expect(html).toContain('Priya Sharma')
-    expect(html).toContain('Andy Chen')
+  it('users table is wired to the live users endpoint', () => {
+    // The hardcoded mock users were replaced by a live fetch — assert the
+    // table exists and pulls from /api/users/stats instead.
     expect(html).toContain('users-table')
+    expect(html).toContain('/api/users/stats')
   })
 })
