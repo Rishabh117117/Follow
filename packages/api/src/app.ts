@@ -147,65 +147,71 @@ export function createApp(options: CreateAppOptions = {}) {
   app.route('/api/queries', queriesRouter)
   app.route('/api/discover', discoverRouter)
 
-  // ─── Debug endpoint: inspect in-memory ClickHouse data ───────────
-  app.get('/api/debug/clickhouse', (c) => {
-    if (!isClickHouseFallback()) {
-      return c.json({ mode: 'real', message: 'Using real ClickHouse — no in-memory data' })
-    }
-    const mem = getInMemoryClickHouse()
-    if (!mem) return c.json({ mode: 'unknown', message: 'No in-memory store' })
+  // ─── Debug endpoints: inspect/clear in-memory ClickHouse ───────────
+  // SECURITY (security-gate-1): these dump and CLEAR the in-memory ClickHouse
+  // store with no auth, and prod normally runs the in-memory fallback — so they
+  // were live and open in production. They are a local inspection aid only;
+  // register them exclusively outside production.
+  if (process.env['NODE_ENV'] !== 'production') {
+    app.get('/api/debug/clickhouse', (c) => {
+      if (!isClickHouseFallback()) {
+        return c.json({ mode: 'real', message: 'Using real ClickHouse — no in-memory data' })
+      }
+      const mem = getInMemoryClickHouse()
+      if (!mem) return c.json({ mode: 'unknown', message: 'No in-memory store' })
 
-    const tables = mem.getAllTables()
-    const data: Record<string, unknown[]> = {}
-    for (const table of tables) {
-      data[table] = mem.getTableData(table)
-    }
-    return c.json({
-      mode: 'in-memory',
-      tables,
-      rowCounts: Object.fromEntries(tables.map((t) => [t, data[t]?.length ?? 0])),
-      data,
+      const tables = mem.getAllTables()
+      const data: Record<string, unknown[]> = {}
+      for (const table of tables) {
+        data[table] = mem.getTableData(table)
+      }
+      return c.json({
+        mode: 'in-memory',
+        tables,
+        rowCounts: Object.fromEntries(tables.map((t) => [t, data[t]?.length ?? 0])),
+        data,
+      })
     })
-  })
 
-  // Debug: clear all in-memory ClickHouse data
-  app.post('/api/debug/clear', (c) => {
-    if (!isClickHouseFallback()) {
-      return c.json({ mode: 'real', message: 'Using real ClickHouse — cannot clear' })
-    }
-    const mem = getInMemoryClickHouse()
-    if (!mem) return c.json({ mode: 'unknown', message: 'No in-memory store' })
+    // Debug: clear all in-memory ClickHouse data
+    app.post('/api/debug/clear', (c) => {
+      if (!isClickHouseFallback()) {
+        return c.json({ mode: 'real', message: 'Using real ClickHouse — cannot clear' })
+      }
+      const mem = getInMemoryClickHouse()
+      if (!mem) return c.json({ mode: 'unknown', message: 'No in-memory store' })
 
-    const result = mem.clearAllTables()
-    return c.json({
-      mode: 'in-memory',
-      cleared: true,
-      ...result,
+      const result = mem.clearAllTables()
+      return c.json({
+        mode: 'in-memory',
+        cleared: true,
+        ...result,
+      })
     })
-  })
 
-  // Debug: get just processed intents (summaries)
-  app.get('/api/debug/summaries', (c) => {
-    if (!isClickHouseFallback()) {
-      return c.json({ mode: 'real', message: 'Using real ClickHouse' })
-    }
-    const mem = getInMemoryClickHouse()
-    if (!mem) return c.json({ mode: 'unknown' })
+    // Debug: get just processed intents (summaries)
+    app.get('/api/debug/summaries', (c) => {
+      if (!isClickHouseFallback()) {
+        return c.json({ mode: 'real', message: 'Using real ClickHouse' })
+      }
+      const mem = getInMemoryClickHouse()
+      if (!mem) return c.json({ mode: 'unknown' })
 
-    const intents = mem.getTableData('processed_intents')
-    return c.json({
-      mode: 'in-memory',
-      count: intents.length,
-      summaries: intents.map((r) => ({
-        timestamp: r['timestamp'],
-        user_action: r['user_action'],
-        user_intent: r['user_intent'],
-        summary_text: r['summary_text'],
-        confidence: r['confidence'],
-        tags: r['tags'],
-      })),
+      const intents = mem.getTableData('processed_intents')
+      return c.json({
+        mode: 'in-memory',
+        count: intents.length,
+        summaries: intents.map((r) => ({
+          timestamp: r['timestamp'],
+          user_action: r['user_action'],
+          user_intent: r['user_intent'],
+          summary_text: r['summary_text'],
+          confidence: r['confidence'],
+          tags: r['tags'],
+        })),
+      })
     })
-  })
+  }
 
   return app
 }

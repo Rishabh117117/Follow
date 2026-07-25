@@ -10,6 +10,8 @@
  *
  * Optional env:
  *   SMOKE_USER_ID        a real user id → enables the authed query_index round-trip
+ *   SMOKE_AUTH_SECRET    the API's AUTH_API_SECRET → mints the Phase-3 bearer
+ *                        for SMOKE_USER_ID (bare x-user-id no longer authenticates)
  *   OPENROUTER_API_KEY   set → exercises one live OpenRouter completion
  *   SMOKE_MODEL          OpenRouter model id (default: free Gemma tier)
  *   SMOKE_MCP_API_KEY    MCP API key → authenticates the /mcp SSE handshake
@@ -18,11 +20,14 @@
  * secret/credential that isn't provided are SKIPPED with a clear message.
  */
 
+import { createHmac } from 'node:crypto'
+
 const BASE = (process.argv[2] || process.env['SMOKE_URL'] || 'http://localhost:3001').replace(
   /\/+$/,
   ''
 )
 const USER_ID = process.env['SMOKE_USER_ID']
+const AUTH_SECRET = process.env['SMOKE_AUTH_SECRET']
 const MCP_API_KEY = process.env['SMOKE_MCP_API_KEY']
 const OPENROUTER_API_KEY = process.env['OPENROUTER_API_KEY']
 const OPENROUTER_MODEL = process.env['SMOKE_MODEL'] || 'google/gemma-4-31b-it:free'
@@ -46,6 +51,19 @@ async function check(name: string, fn: () => Promise<string>): Promise<void> {
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg)
+}
+
+// Phase 3: the API accepts only verified bearer identity (or wsp_ keys). Mint
+// the same HS256 JWT the web app signs — node:crypto only, no dependencies.
+function mintApiToken(secret: string, sub: string): string {
+  const b64 = (s: string): string => Buffer.from(s).toString('base64url')
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64(
+    JSON.stringify({ sub, iss: 'workspace-web', aud: 'workspace-api', iat: now, exp: now + 900 })
+  )
+  const sig = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url')
+  return `${header}.${payload}.${sig}`
 }
 
 async function main(): Promise<void> {
@@ -75,7 +93,8 @@ async function main(): Promise<void> {
     const ctrl = new AbortController()
     const headers: Record<string, string> = { Accept: 'text/event-stream' }
     if (MCP_API_KEY) headers['X-API-Key'] = MCP_API_KEY
-    else if (USER_ID) headers['x-user-id'] = USER_ID
+    else if (USER_ID && AUTH_SECRET)
+      headers['Authorization'] = `Bearer ${mintApiToken(AUTH_SECRET, USER_ID)}`
     let res: Response
     try {
       res = await fetch(`${BASE}/mcp`, { headers, signal: ctrl.signal })
@@ -104,23 +123,26 @@ async function main(): Promise<void> {
   })
 
   // 5. query_index round-trip (needs a real user) ---------------------------
-  if (USER_ID) {
+  if (USER_ID && AUTH_SECRET) {
     await check('POST /api/mcp-rest/query-index (authed)', async () => {
       const res = await fetch(`${BASE}/api/mcp-rest/query-index`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': USER_ID },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${mintApiToken(AUTH_SECRET, USER_ID)}`,
+        },
         body: JSON.stringify({ query: 'smoke test', limit: 1 }),
       })
       assert(res.status === 200, `expected 200, got ${res.status}`)
       const body = (await res.json()) as { data?: unknown; error?: unknown }
       assert(body.error == null, `tool returned error: ${JSON.stringify(body.error)}`)
-      return '200 (query_index round-tripped)'
+      return '200 (query_index round-tripped, minted bearer)'
     })
   } else {
     record(
       'POST /api/mcp-rest/query-index (authed)',
       'SKIP',
-      'set SMOKE_USER_ID to a real user id to exercise the authed round-trip'
+      'set SMOKE_USER_ID + SMOKE_AUTH_SECRET to exercise the authed round-trip (Phase 3: x-user-id alone no longer authenticates)'
     )
   }
 

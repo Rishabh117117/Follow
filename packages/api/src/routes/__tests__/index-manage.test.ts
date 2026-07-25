@@ -15,6 +15,13 @@ vi.mock('../../middleware/auth', () => ({
   }),
 }))
 
+// security-gate-1: membership enforcement has its own tests; unit tests mock
+// the guard permissive so the flat db fake keeps modeling only route logic.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
+}))
+
 const {
   mockSet,
   mockDelete,
@@ -68,6 +75,11 @@ vi.mock('../../db/index', () => {
             }
             return makeThenableChain(() => mockSelectRecord())
           }),
+        })),
+      })),
+      selectDistinct: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => makeThenableChain(() => [])),
         })),
       })),
       update: vi.fn(() => updateChain),

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
@@ -40,7 +41,16 @@ vi.mock('../../db/index', () => ({
 }))
 
 vi.mock('../../db/schema/index', () => ({
-  indexRecords: { workspaceId: 'workspaceId', threadEventId: 'threadEventId', threadType: 'threadType', eventTime: 'eventTime', episodeId: 'episodeId', documentId: 'documentId', isAIInvolved: 'isAIInvolved', indexMagnitude: 'indexMagnitude' },
+  indexRecords: {
+    workspaceId: 'workspaceId',
+    threadEventId: 'threadEventId',
+    threadType: 'threadType',
+    eventTime: 'eventTime',
+    episodeId: 'episodeId',
+    documentId: 'documentId',
+    isAIInvolved: 'isAIInvolved',
+    indexMagnitude: 'indexMagnitude',
+  },
   evidenceRecords: { indexRecordId: 'indexRecordId' },
   episodes: { id: 'id' },
   strandCollaborators: { strandId: 'strandId', userId: 'userId' },
@@ -76,6 +86,14 @@ vi.mock('../../middleware/auth', () => ({
     c.set('userId', 'test-user-id')
     await next()
   }),
+}))
+
+// security-gate-1: membership enforcement has its own tests (services/__tests__/
+// workspace-access.test.ts + __tests__/security-gate.test.ts); unit tests mock
+// it permissive so route logic stays the subject under the flat db fake.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
 }))
 
 import { indexQueryRouter } from '../index-query'

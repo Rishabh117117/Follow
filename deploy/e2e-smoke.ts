@@ -12,7 +12,8 @@
  *
  * Auth (one required to run the loop; otherwise those steps SKIP):
  *   E2E_MCP_KEY   an MCP key (wsp_...) → sent as ?key= (the Claude/SSE path)
- *   E2E_USER_ID   a real user id        → sent as x-user-id (header path)
+ *   E2E_USER_ID + E2E_AUTH_SECRET   a user id + the API's AUTH_API_SECRET →
+ *                 minted bearer (Phase 3: bare x-user-id no longer authenticates)
  *
  * LOCK-IN-1 — the retrieval check is no longer a soft WARN. After the sentinel
  * save we assert, AT THE DB LEVEL, that `index_records`, `document_chunks`,
@@ -41,6 +42,7 @@
 // time. Static-importing the bare `drizzle-orm` specifier resolves cleanly here
 // (matching scripts/preflight/verify-pipeline.ts); a dynamic import of it does
 // not (ESM exports-map quirk).
+import { createHmac } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 
 const BASE = (process.argv[2] || process.env['E2E_URL'] || 'http://localhost:3001').replace(
@@ -49,6 +51,7 @@ const BASE = (process.argv[2] || process.env['E2E_URL'] || 'http://localhost:300
 )
 const MCP_KEY = process.env['E2E_MCP_KEY']
 const USER_ID = process.env['E2E_USER_ID']
+const AUTH_SECRET = process.env['E2E_AUTH_SECRET']
 const POLL = Number(process.env['E2E_POLL'] || '10')
 const SOURCE = process.env['E2E_SOURCE'] || 'claude'
 
@@ -73,6 +76,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// Phase 3: the API accepts only verified bearer identity (or wsp_ keys). Mint
+// the same HS256 JWT the web app signs — node:crypto only, no dependencies.
+function mintApiToken(secret: string, sub: string): string {
+  const b64 = (s: string): string => Buffer.from(s).toString('base64url')
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64(
+    JSON.stringify({ sub, iss: 'workspace-web', aud: 'workspace-api', iat: now, exp: now + 900 })
+  )
+  const sig = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url')
+  return `${header}.${payload}.${sig}`
+}
+
 interface ToolEnvelope {
   data: { content?: { type: string; text?: string }[]; isError?: boolean } | null
   error: { code: string; message: string } | null
@@ -88,7 +104,9 @@ async function callTool(toolNameHyphen: string, body: unknown): Promise<ToolEnve
   const url = new URL(`${BASE}/api/mcp-rest/${toolNameHyphen}`)
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (MCP_KEY) url.searchParams.set('key', MCP_KEY)
-  else if (USER_ID) headers['x-user-id'] = USER_ID
+  else if (USER_ID && AUTH_SECRET)
+    headers['Authorization'] = `Bearer ${mintApiToken(AUTH_SECRET, USER_ID)}`
+  else if (USER_ID) headers['x-user-id'] = USER_ID // Phase 3: 401s without E2E_AUTH_SECRET
   const res = await fetch(url.toString(), {
     method: 'POST',
     headers,

@@ -16,6 +16,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '../db/index'
 import { spaces } from '../db/schema/spaces'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import {
   bulkSignatures,
   checkDiscoverableAllowed,
@@ -57,6 +58,8 @@ const patchDiscoverableSchema = z.object({
 
 discoverRouter.post('/similar', zValidator('json', similarBodySchema), async (c) => {
   const userId = c.get('userId')
+  const denied = await assertWorkspaceAccess(c, c.get('workspaceId'))
+  if (denied) return denied
   const workspaceId = c.get('workspaceId') ?? 'default'
   const body = c.req.valid('json')
 
@@ -116,10 +119,7 @@ discoverRouter.patch(
       .limit(1)
     const row = rows[0]
     if (!row) {
-      return c.json(
-        { data: null, error: { code: 'NOT_FOUND', message: 'Index not found' } },
-        404
-      )
+      return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Index not found' } }, 404)
     }
     if (row.createdBy !== userId) {
       return c.json(
@@ -150,6 +150,8 @@ discoverRouter.patch(
 
 discoverRouter.get('/suggestions', async (c) => {
   const userId = c.get('userId')
+  const denied = await assertWorkspaceAccess(c, c.get('workspaceId'))
+  if (denied) return denied
   const workspaceId = c.get('workspaceId') ?? 'default'
   const indexId = c.req.query('indexId')
   if (!indexId) {
@@ -158,8 +160,7 @@ discoverRouter.get('/suggestions', async (c) => {
       400
     )
   }
-  const privacyFloor =
-    (c.req.query('privacyFloor') as PrivacyFloor | null) ?? 'topics_only'
+  const privacyFloor = (c.req.query('privacyFloor') as PrivacyFloor | null) ?? 'topics_only'
 
   const result = await findSimilarIndexes(
     {
@@ -178,6 +179,8 @@ discoverRouter.get('/recent', async (c) => {
   const userId = c.get('userId')
   const workspaceIdHdr = c.get('workspaceId') ?? 'default'
   const workspaceId = c.req.query('workspaceId') ?? workspaceIdHdr
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const rows = await db
     .select({ id: spaces.id })

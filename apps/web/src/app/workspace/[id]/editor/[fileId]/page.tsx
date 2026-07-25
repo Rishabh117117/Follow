@@ -4,7 +4,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { EditorRouter } from '@/components/editors/editor-router'
-import { useTrackEvent } from '@/hooks/use-track-event'
 
 interface FileData {
   id: string
@@ -19,7 +18,6 @@ export default function EditorPage() {
   const params = useParams<{ id: string; fileId: string }>()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const track = useTrackEvent()
 
   const {
     data: fileData,
@@ -35,12 +33,6 @@ export default function EditorPage() {
     mutationFn: (newName: string) => api.patch(`/api/files/${params.fileId}`, { name: newName }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['file', params.fileId] })
-      track({
-        actionType: 'rename',
-        objectType: 'file',
-        objectId: params.fileId,
-        payload: { event: 'file_renamed' },
-      })
     },
   })
 

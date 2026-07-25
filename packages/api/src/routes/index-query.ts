@@ -12,6 +12,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { authMiddleware } from '../middleware/auth'
 import { executeIndexQuery } from '../services/semantic-index/query-executor'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
@@ -45,6 +46,9 @@ indexQueryRouter.use('*', authMiddleware)
 indexQueryRouter.post('/query', zValidator('json', QuerySchema), async (c) => {
   const body = c.req.valid('json')
   const userId = c.get('userId') as string
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const result = await executeIndexQuery({
     ...body,

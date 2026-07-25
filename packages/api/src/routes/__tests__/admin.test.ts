@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 function makeSelectChain(value: unknown[] = []) {
@@ -27,11 +28,21 @@ vi.mock('../../db/index', () => ({
 }))
 
 vi.mock('../../db/schema/semantic-index', () => ({
-  indexRecords: { userId: 'userId', workspaceId: 'workspaceId', documentId: 'documentId', userName: 'userName' },
+  indexRecords: {
+    userId: 'userId',
+    workspaceId: 'workspaceId',
+    documentId: 'documentId',
+    userName: 'userName',
+  },
   evidenceRecords: {
-    id: 'id', documentId: 'documentId', evidenceType: 'evidenceType',
-    userId: 'userId', ownershipTier: 'ownershipTier', retentionPolicy: 'retentionPolicy',
-    createdAt: 'createdAt', recordHash: 'recordHash',
+    id: 'id',
+    documentId: 'documentId',
+    evidenceType: 'evidenceType',
+    userId: 'userId',
+    ownershipTier: 'ownershipTier',
+    retentionPolicy: 'retentionPolicy',
+    createdAt: 'createdAt',
+    recordHash: 'recordHash',
   },
 }))
 
@@ -54,6 +65,13 @@ vi.mock('../../middleware/auth', () => ({
 
 vi.mock('../../middleware/permissions', () => ({
   requirePermission: vi.fn(() => async (_c: any, next: any) => await next()),
+}))
+
+// security-gate-1: assertWorkspaceAdmin now checks the BODY workspace via
+// checkWorkspaceAccess; membership itself is covered by the guard's own tests.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'admin' }),
 }))
 
 import { adminRouter } from '../admin'

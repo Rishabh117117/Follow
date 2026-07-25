@@ -11,6 +11,15 @@ function isDevBypass(): boolean {
   return process.env['DEV_BYPASS_AUTH'] === 'true'
 }
 
+// Phase 3 break-glass: legacy x-user-id identity is trusted ONLY under
+// DEV_BYPASS_AUTH (local stacks, where the extension/mobile/GWS clients still
+// send headers) or the emergency flag below (rollback without a redeploy: set
+// it in Railway, restart, migrate the broken client, unset). Never enable the
+// flag as a steady state — it reopens impersonation-by-header.
+function acceptLegacyUserHeader(): boolean {
+  return isDevBypass() || process.env['AUTH_ACCEPT_LEGACY_USER_HEADER'] === 'true'
+}
+
 export interface AuthUser {
   id: string
   email: string
@@ -41,13 +50,12 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     return
   }
 
-  // AUTH-FIX-1: prefer a verified bearer JWT (human identity). A VALID API
-  // token authenticates by its `sub` claim and takes precedence over any
-  // x-user-id header. DUAL-ACCEPT (Phase 1): an absent/invalid token falls
-  // through to the legacy x-user-id path so existing header clients
-  // (extension / GWS / mobile) keep working. Phase 3 (deferred) removes that
-  // fallthrough so an invalid/expired bearer becomes a hard 401. `wsp_` keys
-  // are handled upstream by api-key-auth/flexAuth, not here.
+  // AUTH-FIX-1 Phase 3 (2026-07): identity comes ONLY from verified
+  // credentials — this bearer JWT (humans; minted by the web app, verified by
+  // signature) or a wsp_ API key handled upstream by api-key-auth/flexAuth
+  // (machines). The x-user-id header is NOT trusted for identity anymore;
+  // the legacy path below survives solely behind acceptLegacyUserHeader()
+  // (local dev bypass / emergency break-glass).
   const authz = c.req.header('authorization')
   const bearer = authz && /^Bearer\s+/i.test(authz) ? authz.replace(/^Bearer\s+/i, '').trim() : null
   if (bearer && !bearer.startsWith('wsp_')) {
@@ -71,8 +79,29 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
       await next()
       return
     }
-    // Bearer present but not a valid API token → fall through (dual-accept).
-    // PHASE 3: replace this fallthrough with a 401 (no header trust).
+    // Bearer present but not a valid API token: hard 401 (Phase 3). Only the
+    // dev-bypass/break-glass path may fall through to header identity.
+    if (!acceptLegacyUserHeader()) {
+      return c.json(
+        { data: null, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } },
+        401
+      )
+    }
+  }
+
+  // No usable bearer: Phase 3 rejects here — header identity is forgeable and
+  // no longer authenticates outside dev bypass / break-glass.
+  if (!acceptLegacyUserHeader()) {
+    return c.json(
+      {
+        data: null,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required (Bearer API token or wsp_ API key)',
+        },
+      },
+      401
+    )
   }
 
   const userId = headerUserId

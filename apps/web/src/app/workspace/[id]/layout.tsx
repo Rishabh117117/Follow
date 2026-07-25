@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { CommandPaletteProvider } from '@/components/command-palette-provider'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { FollowLayout } from '@/components/follow/shell/follow-layout'
-import { useSignalCapture } from '@/hooks/use-signal-capture'
 import { useSessionTracking } from '@/hooks/use-session-tracking'
 import { DEV_WORKSPACE } from '@workspace/shared/constants'
 
@@ -38,9 +37,6 @@ export default function WorkspaceLayout({ children, params }: WorkspaceLayoutPro
       router.replace(newPath)
     }
   }, [workspaceId, params.id, router])
-
-  // Signal capture: always-on activity signals → ClickHouse → thread distillation → provenance
-  useSignalCapture({ workspaceId })
 
   // Session tracking — opens a row in `sessions` for this tab; heartbeats every
   // 60s; closes via sendBeacon on unload. Drives Archivist + Profiler scheduling.

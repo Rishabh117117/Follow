@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { getOrCreateSharedState, updateSharedState } from '../services/ai-state/state-manager'
 
 const sharedStateRouter = new Hono()
@@ -8,9 +9,11 @@ sharedStateRouter.use('*', authMiddleware)
 // GET /:documentId — Read document shared state
 sharedStateRouter.get('/:documentId', async (c) => {
   const documentId = c.req.param('documentId')
-  const workspaceId = c.req.header('x-workspace-id') || ''
+  const workspaceId = c.get('workspaceId')
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
-  const { state } = await getOrCreateSharedState(documentId, workspaceId)
+  const { state } = await getOrCreateSharedState(documentId, workspaceId!)
 
   return c.json({ data: state, error: null })
 })
@@ -18,19 +21,18 @@ sharedStateRouter.get('/:documentId', async (c) => {
 // POST /:documentId/resolve-conflict — Resolve a knowledge conflict
 sharedStateRouter.post('/:documentId/resolve-conflict', async (c) => {
   const documentId = c.req.param('documentId')
-  const workspaceId = c.req.header('x-workspace-id') || ''
+  const workspaceId = c.get('workspaceId')
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const body = await c.req.json()
 
   const { tensionId, resolution, keepKnowledgeId, supersededKnowledgeId } = body
 
   if (!tensionId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'tensionId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'tensionId required' } }, 400)
   }
 
-  await updateSharedState(documentId, workspaceId, (current) => {
+  await updateSharedState(documentId, workspaceId!, (current) => {
     const updated = { ...current }
 
     const tension = updated.tensions.find((t: { id: string }) => t.id === tensionId)
@@ -65,20 +67,19 @@ sharedStateRouter.post('/:documentId/resolve-conflict', async (c) => {
 // POST /:documentId/add-knowledge — Manually add shared knowledge
 sharedStateRouter.post('/:documentId/add-knowledge', async (c) => {
   const documentId = c.req.param('documentId')
-  const workspaceId = c.req.header('x-workspace-id') || ''
+  const workspaceId = c.get('workspaceId')
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const userId = c.get('userId') as string
   const body = await c.req.json()
 
   const { fact, source, linkedSection, userName } = body
 
   if (!fact) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'fact required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'fact required' } }, 400)
   }
 
-  await updateSharedState(documentId, workspaceId, (current) => {
+  await updateSharedState(documentId, workspaceId!, (current) => {
     const updated = { ...current }
 
     updated.knowledge.push({

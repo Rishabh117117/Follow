@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../middleware/auth', () => ({
@@ -9,6 +10,13 @@ vi.mock('../../middleware/auth', () => ({
 
 vi.mock('../../services/project-strand-manager', () => ({
   ensureProjectStrand: vi.fn().mockResolvedValue(undefined),
+}))
+
+// security-gate-1: membership enforcement has its own tests; mock permissive
+// so the POST-body workspace guard doesn't consult the flat db fake.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
 }))
 
 const mockSpaces: Array<any> = []
@@ -159,7 +167,10 @@ describe('Indexes Routes (WIRE-1)', () => {
     const res = await app.request('/api/indexes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'project', workspaceId: 'c3d4e5f6-a7b8-9012-cdef-123456789012' }),
+      body: JSON.stringify({
+        type: 'project',
+        workspaceId: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+      }),
     })
     expect(res.status).toBe(400)
   })

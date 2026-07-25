@@ -1,14 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * Document Memory API Routes — unit tests (Sprint IX-2)
- *
- * Tests GET /:fileId, POST /:fileId/interpret, GET /:fileId/trail/:ref,
- * PATCH /patterns/:id using the semantic index.
+ * Document Memory API Routes — unit tests (Sprint IX-2; security-gate-1
+ * updated: by-id endpoints now pre-load the owning resource and pass its
+ * workspace through the membership guard, so the db fake is a seedable FIFO —
+ * push one result array per expected `db.select(...)` call; unqueued selects
+ * resolve empty.)
  */
 
-const { mockUpdate } = vi.hoisted(() => ({
-  mockUpdate: vi.fn(),
+const { selectQueue } = vi.hoisted(() => ({
+  selectQueue: [] as unknown[][],
 }))
 
 function makeSelectChain(value: unknown[] = []) {
@@ -26,7 +28,7 @@ function makeSelectChain(value: unknown[] = []) {
 
 vi.mock('../../db/index', () => ({
   db: {
-    select: () => makeSelectChain([]),
+    select: () => makeSelectChain(selectQueue.length ? (selectQueue.shift() as unknown[]) : []),
     insert: vi.fn(),
     update: () => ({
       set: () => ({
@@ -39,9 +41,15 @@ vi.mock('../../db/index', () => ({
 }))
 
 vi.mock('../../db/schema/index', () => ({
-  documentInterpretations: { fileId: 'fileId', updatedAt: 'updatedAt' },
-  documentPatterns: { id: 'id', fileId: 'fileId', confidence: 'confidence' },
-  documentDecisionTrails: { fileId: 'fileId' },
+  documentInterpretations: { fileId: 'fileId', workspaceId: 'workspaceId', updatedAt: 'updatedAt' },
+  documentPatterns: {
+    id: 'id',
+    fileId: 'fileId',
+    workspaceId: 'workspaceId',
+    confidence: 'confidence',
+  },
+  documentDecisionTrails: { fileId: 'fileId', workspaceId: 'workspaceId' },
+  files: { id: 'id', workspaceId: 'workspaceId' },
 }))
 
 vi.mock('../../services/semantic-index/query-executor', () => ({
@@ -70,24 +78,36 @@ vi.mock('../../middleware/auth', () => ({
   }),
 }))
 
+// security-gate-1: membership enforcement has its own tests (services/__tests__/
+// workspace-access.test.ts + __tests__/security-gate.test.ts); mocked permissive
+// here so route logic stays the subject.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
+}))
+
 import { docMemoryRouter } from '../doc-memory'
+import { assertWorkspaceAccess } from '../../services/workspace-access'
 import { Hono } from 'hono'
+
+const WS = '00000000-0000-0000-0000-000000000001'
 
 describe('DocMemoryRoutes (IX-2)', () => {
   let app: Hono
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(assertWorkspaceAccess).mockResolvedValue(null)
+    selectQueue.length = 0
     app = new Hono()
     app.route('/api/doc-memory', docMemoryRouter)
   })
 
   describe('GET /:fileId', () => {
     it('returns DocumentMemory shape with interpretation from index', async () => {
-      const res = await app.request(
-        '/api/doc-memory/test-file-id?workspaceId=00000000-0000-0000-0000-000000000001',
-        { method: 'GET' }
-      )
+      const res = await app.request(`/api/doc-memory/test-file-id?workspaceId=${WS}`, {
+        method: 'GET',
+      })
 
       expect(res.status).toBe(200)
       const body = (await res.json()) as any
@@ -98,10 +118,9 @@ describe('DocMemoryRoutes (IX-2)', () => {
     })
 
     it('returns interpretation with correct fields', async () => {
-      const res = await app.request(
-        '/api/doc-memory/test-file-id?workspaceId=00000000-0000-0000-0000-000000000001',
-        { method: 'GET' }
-      )
+      const res = await app.request(`/api/doc-memory/test-file-id?workspaceId=${WS}`, {
+        method: 'GET',
+      })
 
       const body = (await res.json()) as any
       const interp = body.data.interpretation
@@ -116,9 +135,13 @@ describe('DocMemoryRoutes (IX-2)', () => {
       }
     })
 
-    it('returns 200 without workspaceId (falls back to DB)', async () => {
+    it('passes the workspaceId (even when absent → empty) through the guard', async () => {
+      // security-gate-1: workspaceId is guard-checked; in prod an empty value
+      // is a 400 from the real assertWorkspaceAccess. Unit scope just proves
+      // the handler routes the value into the guard before any read.
       const res = await app.request('/api/doc-memory/test-file-id', { method: 'GET' })
-      expect(res.status).toBe(200)
+      expect(vi.mocked(assertWorkspaceAccess)).toHaveBeenCalledWith(expect.anything(), '')
+      expect(res.status).toBe(200) // permissive mock lets the handler proceed
     })
   })
 
@@ -127,7 +150,7 @@ describe('DocMemoryRoutes (IX-2)', () => {
       const res = await app.request('/api/doc-memory/test-file-id/interpret', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId: '00000000-0000-0000-0000-000000000001' }),
+        body: JSON.stringify({ workspaceId: WS }),
       })
 
       expect(res.status).toBe(200)
@@ -146,7 +169,8 @@ describe('DocMemoryRoutes (IX-2)', () => {
   })
 
   describe('GET /:fileId/trail/:paragraphRef', () => {
-    it('returns decision trails from DB', async () => {
+    it('returns decision trails from DB (file resolved → workspace guarded)', async () => {
+      selectQueue.push([{ workspaceId: WS }]) // the file pre-load
       const res = await app.request('/api/doc-memory/test-file-id/trail/intro', {
         method: 'GET',
       })
@@ -155,11 +179,21 @@ describe('DocMemoryRoutes (IX-2)', () => {
       const body = (await res.json()) as any
       expect(body.error).toBeNull()
       expect(Array.isArray(body.data)).toBe(true)
+      expect(vi.mocked(assertWorkspaceAccess)).toHaveBeenCalledWith(expect.anything(), WS)
+    })
+
+    it('404s when the file does not exist', async () => {
+      // queue empty → file pre-load resolves []
+      const res = await app.request('/api/doc-memory/missing-file/trail/intro', {
+        method: 'GET',
+      })
+      expect(res.status).toBe(404)
     })
   })
 
   describe('PATCH /patterns/:patternId', () => {
     it('updates pattern dismissed state', async () => {
+      selectQueue.push([{ workspaceId: WS }]) // the pattern pre-load
       const res = await app.request('/api/doc-memory/patterns/pat-1', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -167,9 +201,11 @@ describe('DocMemoryRoutes (IX-2)', () => {
       })
 
       expect(res.status).toBe(200)
+      expect(vi.mocked(assertWorkspaceAccess)).toHaveBeenCalledWith(expect.anything(), WS)
     })
 
     it('rejects empty update body', async () => {
+      selectQueue.push([{ workspaceId: WS }]) // the pattern pre-load
       const res = await app.request('/api/doc-memory/patterns/pat-1', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -177,6 +213,15 @@ describe('DocMemoryRoutes (IX-2)', () => {
       })
 
       expect(res.status).toBe(400)
+    })
+
+    it('404s when the pattern does not exist', async () => {
+      const res = await app.request('/api/doc-memory/patterns/missing-pat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dismissed: true }),
+      })
+      expect(res.status).toBe(404)
     })
   })
 })

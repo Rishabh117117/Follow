@@ -6,6 +6,7 @@ import { chatConversations, chatMessages } from '../db/schema/chat'
 import { strands } from '../db/schema/threads'
 import { evidenceRecords } from '../db/schema/semantic-index'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 const searchRouter = new Hono()
 searchRouter.use('*', authMiddleware)
@@ -20,6 +21,9 @@ searchRouter.get('/', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   if (!q) {
     return c.json({ data: { files: [], chats: [], notes: [], strands: [] }, error: null })
@@ -59,10 +63,7 @@ searchRouter.get('/', async (c) => {
       .from(chatMessages)
       .innerJoin(chatConversations, eq(chatMessages.conversationId, chatConversations.id))
       .where(
-        and(
-          eq(chatConversations.workspaceId, workspaceId),
-          ilike(chatMessages.content, pattern)
-        )
+        and(eq(chatConversations.workspaceId, workspaceId), ilike(chatMessages.content, pattern))
       )
       .orderBy(desc(chatMessages.createdAt))
       .limit(5),

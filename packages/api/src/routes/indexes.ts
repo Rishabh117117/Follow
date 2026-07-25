@@ -12,7 +12,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { eq, and, isNull, sql, count, inArray, or, ne } from 'drizzle-orm'
+import { eq, and, isNull, count, inArray, or, ne } from 'drizzle-orm'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { db } from '../db/index'
 import { spaces } from '../db/schema/spaces'
@@ -22,6 +22,7 @@ import { indexRecords } from '../db/schema/semantic-index'
 import { files } from '../db/schema/files'
 import { users } from '../db/schema/users'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { ensureProjectStrand } from '../services/project-strand-manager'
 
 // ─── Passcode hashing (STABILIZE-3) ────────────────────────────────────
@@ -97,12 +98,7 @@ async function countFactsForProject(spaceId: string): Promise<number> {
     const convRows = await db
       .select({ id: chatConversations.id })
       .from(chatConversations)
-      .where(
-        or(
-          eq(chatConversations.spaceId, spaceId),
-          eq(chatConversations.workspaceId, spaceId)
-        )
-      )
+      .where(or(eq(chatConversations.spaceId, spaceId), eq(chatConversations.workspaceId, spaceId)))
     const convIds = convRows.map((r) => r.id)
 
     const fileRows = await db
@@ -159,10 +155,7 @@ async function countFilesForProject(spaceId: string): Promise<number> {
       .select({ cnt: count() })
       .from(files)
       .where(
-        and(
-          or(eq(files.spaceId, spaceId), eq(files.workspaceId, spaceId)),
-          isNull(files.deletedAt)
-        )
+        and(or(eq(files.spaceId, spaceId), eq(files.workspaceId, spaceId)), isNull(files.deletedAt))
       )
     return Number(rawRow?.cnt ?? 0) + Number(fileRow?.cnt ?? 0)
   } catch {
@@ -187,12 +180,7 @@ async function countChatsForProject(spaceId: string): Promise<number> {
     const [row] = await db
       .select({ cnt: count() })
       .from(chatConversations)
-      .where(
-        or(
-          eq(chatConversations.spaceId, spaceId),
-          eq(chatConversations.workspaceId, spaceId)
-        )
-      )
+      .where(or(eq(chatConversations.spaceId, spaceId), eq(chatConversations.workspaceId, spaceId)))
     return Number(row?.cnt ?? 0)
   } catch {
     return 0
@@ -241,11 +229,7 @@ indexesRouter.get('/', async (c) => {
       .select()
       .from(spaces)
       .where(
-        and(
-          eq(spaces.createdBy, userId),
-          eq(spaces.isProject, true),
-          isNull(spaces.deletedAt)
-        )
+        and(eq(spaces.createdBy, userId), eq(spaces.isProject, true), isNull(spaces.deletedAt))
       )
 
     for (const space of userSpaces) {
@@ -300,6 +284,9 @@ indexesRouter.post('/', zValidator('json', CreateIndexSchema), async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   try {
     const [space] = await db
       .insert(spaces)
@@ -351,10 +338,7 @@ indexesRouter.delete('/:id', async (c) => {
   const id = c.req.param('id')
 
   if (id === 'personal') {
-    return c.json(
-      { data: null, error: { message: 'The Personal index cannot be deleted.' } },
-      400
-    )
+    return c.json({ data: null, error: { message: 'The Personal index cannot be deleted.' } }, 400)
   }
 
   const [space] = await db
@@ -370,7 +354,10 @@ indexesRouter.delete('/:id', async (c) => {
   // Only the creator can delete (simple ownership check for now).
   if (space.createdBy !== userId) {
     return c.json(
-      { data: null, error: { code: 'FORBIDDEN', message: 'Only the index creator can delete it.' } },
+      {
+        data: null,
+        error: { code: 'FORBIDDEN', message: 'Only the index creator can delete it.' },
+      },
       403
     )
   }
@@ -401,7 +388,7 @@ async function loadSpaceOrNotFound(
     .where(and(eq(spaces.id, id), isNull(spaces.deletedAt)))
     .limit(1)
   if (!space) return null
-  const meta = ((space.metadata as unknown) as LockMeta | null) ?? {}
+  const meta = (space.metadata as unknown as LockMeta | null) ?? {}
   return { space, meta }
 }
 
@@ -419,10 +406,7 @@ indexesRouter.post('/:id/lock', zValidator('json', SetPasscodeSchema), async (c)
   const { passcode } = c.req.valid('json')
 
   if (id === 'personal') {
-    return c.json(
-      { data: null, error: { message: 'The Personal index cannot be locked.' } },
-      400
-    )
+    return c.json({ data: null, error: { message: 'The Personal index cannot be locked.' } }, 400)
   }
 
   const found = await loadSpaceOrNotFound(id)
@@ -463,7 +447,10 @@ indexesRouter.post('/:id/unlock', zValidator('json', UnlockSchema), async (c) =>
   }
   if (found.space.createdBy !== userId) {
     return c.json(
-      { data: null, error: { code: 'FORBIDDEN', message: 'Only the index creator can unlock it.' } },
+      {
+        data: null,
+        error: { code: 'FORBIDDEN', message: 'Only the index creator can unlock it.' },
+      },
       403
     )
   }
@@ -474,9 +461,7 @@ indexesRouter.post('/:id/unlock', zValidator('json', UnlockSchema), async (c) =>
 
   // Cooldown check (after MAX_FAILURES bad attempts)
   if (meta.cooldownUntil && new Date(meta.cooldownUntil) > new Date()) {
-    const secondsLeft = Math.ceil(
-      (new Date(meta.cooldownUntil).getTime() - Date.now()) / 1000
-    )
+    const secondsLeft = Math.ceil((new Date(meta.cooldownUntil).getTime() - Date.now()) / 1000)
     return c.json(
       {
         data: null,
@@ -535,7 +520,10 @@ indexesRouter.post('/:id/recover', async (c) => {
   }
   if (found.space.createdBy !== userId) {
     return c.json(
-      { data: null, error: { code: 'FORBIDDEN', message: 'Only the index creator can recover it.' } },
+      {
+        data: null,
+        error: { code: 'FORBIDDEN', message: 'Only the index creator can recover it.' },
+      },
       403
     )
   }

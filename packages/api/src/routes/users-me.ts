@@ -3,6 +3,7 @@
  */
 
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { eq, and } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth'
 import { db } from '../db/index'
@@ -17,11 +18,21 @@ import type { UserSettings } from '@workspace/shared/types'
 export const usersMeRouter = new Hono()
 usersMeRouter.use('*', authMiddleware)
 
+/** These routes scope rows by workspace; without the x-workspace-id header
+ *  drizzle would receive `undefined` and 500 (UNDEFINED_VALUE). Fail clean. */
+function missingWorkspaceHeader(c: Context) {
+  return c.json(
+    { data: null, error: { code: 'BAD_REQUEST', message: 'x-workspace-id header required' } },
+    400
+  )
+}
+
 // ─── GET /me — current user + profile + statePersistent ──────────────
 
 usersMeRouter.get('/', async (c) => {
   const userId = c.get('userId') as string
-  const workspaceId = c.get('workspaceId') as string
+  const workspaceId = c.get('workspaceId')
+  if (!workspaceId) return missingWorkspaceHeader(c)
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
   if (!user) {
@@ -66,7 +77,8 @@ usersMeRouter.get('/', async (c) => {
 
 usersMeRouter.patch('/', async (c) => {
   const userId = c.get('userId') as string
-  const workspaceId = c.get('workspaceId') as string
+  const workspaceId = c.get('workspaceId')
+  if (!workspaceId) return missingWorkspaceHeader(c)
   const body = (await c.req.json()) as { name?: string; settings?: Partial<UserSettings> }
 
   // Update user name if provided
@@ -116,14 +128,12 @@ usersMeRouter.patch('/', async (c) => {
 
 usersMeRouter.post('/push-token', async (c) => {
   const userId = c.get('userId') as string
-  const workspaceId = c.get('workspaceId') as string
+  const workspaceId = c.get('workspaceId')
+  if (!workspaceId) return missingWorkspaceHeader(c)
   const body = (await c.req.json()) as { token?: string; platform?: string }
 
   if (!body.token) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'token required' } },
-      400,
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'token required' } }, 400)
   }
 
   const platform = body.platform ?? 'unknown'
@@ -135,7 +145,7 @@ usersMeRouter.post('/push-token', async (c) => {
     .limit(1)
 
   if (profile) {
-    const currentSettings = ((profile.settings ?? {}) as Record<string, unknown>)
+    const currentSettings = (profile.settings ?? {}) as Record<string, unknown>
     const tokens = (currentSettings.pushTokens ?? {}) as Record<string, string>
     tokens[platform] = body.token
 
@@ -177,7 +187,8 @@ usersMeRouter.get('/accounts', async (c) => {
 
 usersMeRouter.get('/connected-apps', async (c) => {
   const userId = c.get('userId') as string
-  const workspaceId = c.get('workspaceId') as string
+  const workspaceId = c.get('workspaceId')
+  if (!workspaceId) return missingWorkspaceHeader(c)
 
   // Active clients currently in MCP session map
   const active = getActiveClients()
@@ -232,7 +243,8 @@ usersMeRouter.get('/connected-apps', async (c) => {
 
 usersMeRouter.get('/export', async (c) => {
   const userId = c.get('userId') as string
-  const workspaceId = c.get('workspaceId') as string
+  const workspaceId = c.get('workspaceId')
+  if (!workspaceId) return missingWorkspaceHeader(c)
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
   const userFiles = await db.select().from(files).where(eq(files.createdBy, userId))

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Hono } from 'hono'
 
@@ -19,6 +20,13 @@ vi.mock('../../middleware/api-key-auth', () => ({
     }
   }),
   apiKeyAuthMiddleware: vi.fn(),
+}))
+
+// security-gate-1: the /mcp handlers guard the session workspace before
+// getOrCreateSession; membership has its own tests — mock permissive here.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
 }))
 
 // Mock tools to avoid DB calls

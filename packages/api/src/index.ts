@@ -78,6 +78,17 @@ waitForDb()
       )
     }
 
+    // Phase 3 break-glass must never become a steady state: it re-enables the
+    // forgeable x-user-id identity path that Phase 3 removed.
+    if (
+      process.env['NODE_ENV'] === 'production' &&
+      process.env['AUTH_ACCEPT_LEGACY_USER_HEADER'] === 'true'
+    ) {
+      console.warn(
+        '[Startup] SECURITY: AUTH_ACCEPT_LEGACY_USER_HEADER=true in production — legacy x-user-id identity is re-enabled (break-glass). Migrate the client, then unset it.'
+      )
+    }
+
     // Seed dev user when running in dev bypass mode
     if (process.env['DEV_BYPASS_AUTH'] === 'true') {
       await seedDevUser()

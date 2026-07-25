@@ -3,6 +3,7 @@ import { eq, desc, and, sql } from 'drizzle-orm'
 import { db } from '../db/index'
 import { notifications } from '../db/schema/collaboration'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 const app = new Hono()
 
@@ -117,6 +118,11 @@ app.post('/', async (c) => {
       400
     )
   }
+
+  // A caller may only create notifications inside a workspace they belong to —
+  // otherwise this injects arbitrary notifications into other tenants.
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const [notif] = await db
     .insert(notifications)

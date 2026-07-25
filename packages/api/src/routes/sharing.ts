@@ -1,16 +1,47 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../db/index'
 import { fileShares } from '../db/schema/collaboration'
 import { files } from '../db/schema/files'
 import { users } from '../db/schema/users'
+import { privacyFilterRules, sharedSlices } from '../db/schema/sharing'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { nanoid } from 'nanoid'
 import { emitNotification } from '../services/notifications/emit'
 
 const app = new Hono()
 
 app.use('*', authMiddleware)
+
+// ─── Cross-tenant guards ─────────────────────────────────────────────
+// Load a resource's owning workspaceId, then assert the caller is a member
+// of that workspace. Returns a ready-to-return error Response (404 when the
+// resource is gone, 401/403 on deny) or null when access is granted.
+async function guardFileAccess(c: Context, fileId: string): Promise<Response | null> {
+  const [file] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, fileId))
+    .limit(1)
+  if (!file) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  return assertWorkspaceAccess(c, file.workspaceId)
+}
+
+async function guardSliceAccess(c: Context, sliceId: string): Promise<Response | null> {
+  const [slice] = await db
+    .select({ workspaceId: sharedSlices.workspaceId })
+    .from(sharedSlices)
+    .where(eq(sharedSlices.id, sliceId))
+    .limit(1)
+  if (!slice) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Slice not found' } }, 404)
+  }
+  return assertWorkspaceAccess(c, slice.workspaceId)
+}
 
 // ─── Share a file with a user ────────────────────────────────────────
 app.post('/files/:fileId/share', async (c) => {
@@ -35,6 +66,9 @@ app.post('/files/:fileId/share', async (c) => {
   if (!file) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
+
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
 
   let targetUserId = body.userId ?? null
 
@@ -74,8 +108,9 @@ app.post('/files/:fileId/share', async (c) => {
     const { extractFileContent } = await import('../services/document/yjs-text-extractor')
 
     let documentContent = ''
-    let documentTitle = file.name
+    const documentTitle = file.name
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- extractor takes the raw file row shape
     const outline = extractFileContent(file as any)
     if (outline?.fullText) {
       documentContent = outline.fullText
@@ -157,6 +192,9 @@ app.get('/files/:fileId/my-share', async (c) => {
 app.get('/files/:fileId/shares', async (c) => {
   const fileId = c.req.param('fileId')
 
+  const denied = await guardFileAccess(c, fileId)
+  if (denied) return denied
+
   const results = await db
     .select({
       share: fileShares,
@@ -185,6 +223,9 @@ app.patch('/files/:fileId/shares/:shareUserId', async (c) => {
   const shareUserId = c.req.param('shareUserId')
   const body = await c.req.json<{ permission: 'viewer' | 'editor' }>()
 
+  const denied = await guardFileAccess(c, fileId)
+  if (denied) return denied
+
   const [updated] = await db
     .update(fileShares)
     .set({ permission: body.permission })
@@ -203,6 +244,9 @@ app.delete('/files/:fileId/shares/:shareUserId', async (c) => {
   const fileId = c.req.param('fileId')
   const shareUserId = c.req.param('shareUserId')
 
+  const denied = await guardFileAccess(c, fileId)
+  if (denied) return denied
+
   await db
     .delete(fileShares)
     .where(and(eq(fileShares.fileId, fileId), eq(fileShares.userId, shareUserId)))
@@ -215,6 +259,9 @@ app.post('/files/:fileId/link', async (c) => {
   const userId = c.get('userId')
   const fileId = c.req.param('fileId')
   const body = await c.req.json<{ permission?: 'viewer' | 'editor' }>()
+
+  const denied = await guardFileAccess(c, fileId)
+  if (denied) return denied
 
   const shareToken = nanoid(32)
 
@@ -256,7 +303,10 @@ app.post('/passcode/setup', async (c) => {
 
   if (!body.passcode || body.passcode.length < 4) {
     return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'Passcode must be at least 4 characters' } },
+      {
+        data: null,
+        error: { code: 'BAD_REQUEST', message: 'Passcode must be at least 4 characters' },
+      },
       400
     )
   }
@@ -278,20 +328,14 @@ app.post('/passcode/unlock', async (c) => {
   const body = await c.req.json<{ passcode?: string }>()
 
   if (!body.passcode) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'passcode required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'passcode required' } }, 400)
   }
 
   const { unlockIndex } = await import('../services/sharing/passcode')
   const result = await unlockIndex({ userId, passcode: body.passcode })
 
   if (!result.success) {
-    return c.json(
-      { data: null, error: { code: 'UNAUTHORIZED', message: 'Invalid passcode' } },
-      401
-    )
+    return c.json({ data: null, error: { code: 'UNAUTHORIZED', message: 'Invalid passcode' } }, 401)
   }
 
   return c.json({
@@ -334,10 +378,7 @@ app.put('/preset', async (c) => {
   const body = await c.req.json<{ preset?: string }>()
 
   if (!body.preset || !['private', 'balanced', 'open', 'custom'].includes(body.preset)) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'Invalid preset' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'Invalid preset' } }, 400)
   }
 
   const { setActivePreset } = await import('../services/sharing/privacy-filter')
@@ -390,6 +431,9 @@ app.post('/rules', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const { addCustomRule } = await import('../services/sharing/privacy-filter')
   const result = await addCustomRule({
     userId,
@@ -407,6 +451,19 @@ app.post('/rules', async (c) => {
 // DELETE /api/sharing/rules/:id — remove a custom rule
 app.delete('/rules/:id', async (c) => {
   const id = c.req.param('id')
+
+  // Cross-tenant guard: load the rule's owning workspace and assert membership.
+  const [rule] = await db
+    .select({ workspaceId: privacyFilterRules.workspaceId })
+    .from(privacyFilterRules)
+    .where(eq(privacyFilterRules.id, id))
+    .limit(1)
+  if (!rule) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Rule not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, rule.workspaceId)
+  if (denied) return denied
+
   const { removeCustomRule } = await import('../services/sharing/privacy-filter')
   await removeCustomRule(id)
   return c.json({ data: { deleted: true }, error: null })
@@ -446,11 +503,11 @@ app.post('/requests', async (c) => {
     )
   }
   if (!['document', 'topic', 'temporal'].includes(body.scopeType)) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'Invalid scopeType' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'Invalid scopeType' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const { createContextRequest } = await import('../services/sharing/context-request')
   const result = await createContextRequest({
@@ -489,7 +546,10 @@ app.post('/requests/:id/approve', async (c) => {
 
   if (!result.success) {
     return c.json(
-      { data: null, error: { code: 'APPROVAL_FAILED', message: result.reason ?? 'Approval failed' } },
+      {
+        data: null,
+        error: { code: 'APPROVAL_FAILED', message: result.reason ?? 'Approval failed' },
+      },
       400
     )
   }
@@ -500,9 +560,7 @@ app.post('/requests/:id/approve', async (c) => {
 app.post('/requests/:id/deny', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
-  const body = await c.req
-    .json<{ reason?: string }>()
-    .catch(() => ({}) as { reason?: string })
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string })
 
   const { denyContextRequest } = await import('../services/sharing/context-request')
   const result = await denyContextRequest({
@@ -576,9 +634,7 @@ app.get('/slices/sent', async (c) => {
 app.post('/slices/:id/revoke', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
-  const body = await c.req
-    .json<{ reason?: string }>()
-    .catch(() => ({}) as { reason?: string })
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string })
 
   const { revokeSlice } = await import('../services/sharing/slice-builder')
   const result = await revokeSlice({
@@ -658,6 +714,10 @@ app.post('/slices/:id/downgrade-to-shared', async (c) => {
 // POST /api/sharing/slices/:id/sync — manual sync trigger (testing / refresh)
 app.post('/slices/:id/sync', async (c) => {
   const id = c.req.param('id')
+
+  const denied = await guardSliceAccess(c, id)
+  if (denied) return denied
+
   const { syncLiveSlice } = await import('../services/sharing/sync-service')
   const result = await syncLiveSlice(id)
   return c.json({ data: result, error: null })
@@ -666,6 +726,10 @@ app.post('/slices/:id/sync', async (c) => {
 // GET /api/sharing/slices/:id/sync-history — full audit trail
 app.get('/slices/:id/sync-history', async (c) => {
   const id = c.req.param('id')
+
+  const denied = await guardSliceAccess(c, id)
+  if (denied) return denied
+
   const { getSyncEvents } = await import('../services/sharing/sync-service')
   const events = await getSyncEvents(id)
   return c.json({ data: events, error: null })

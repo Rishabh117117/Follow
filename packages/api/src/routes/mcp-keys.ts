@@ -12,6 +12,7 @@ import { db } from '../db/index'
 import { apiKeys } from '../db/schema/collaboration'
 import { workspaceMembers } from '../db/schema/workspaces'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 export const mcpKeysRouter = new Hono()
 mcpKeysRouter.use('*', authMiddleware)
@@ -43,6 +44,12 @@ mcpKeysRouter.post('/', async (c) => {
       400
     )
   }
+
+  // The membership fallback above always picks the caller's own workspace, but a
+  // caller-supplied x-workspace-id header could name someone else's — the minted
+  // wsp_ key would then grant them access to it. Guard the resolved workspace.
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const name = body.name ?? 'MCP Key'
   const rawKey = `wsp_${randomBytes(32).toString('hex')}`
