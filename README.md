@@ -69,4 +69,4 @@ npx tsx scripts/launch.ts # full stack: API :3001, web :3009, dev console :4000
 
 ## Reading guide
 
-Start with [`CLAUDE.md`](CLAUDE.md) (the working mental model), then `packages/api/src/services/pipeline/` and `services/semantic-index/` for the pipeline, `services/reference-agent/` for recall, `mcp/tools/` for the agent surface, and `apps/web/src/components/follow/` for the dashboard. The audit reports in [`docs/audits/`](docs/audits/) document how each major change was verified — they are the engineering diary of this codebase.
+Start with [`docs/CODEBASE-WALKTHROUGH.md`](docs/CODEBASE-WALKTHROUGH.md) (a guided tour: the four data journeys, the pipeline, auth, testing, deploy) and [`CLAUDE.md`](CLAUDE.md) (the working mental model), then `packages/api/src/services/pipeline/` and `services/semantic-index/` for the pipeline, `services/reference-agent/` for recall, `mcp/tools/` for the agent surface, and `apps/web/src/components/follow/` for the dashboard. The audit reports in [`docs/audits/`](docs/audits/) document how each major change was verified — they are the engineering diary of this codebase.
