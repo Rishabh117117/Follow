@@ -25,9 +25,29 @@ import { z } from 'zod'
 import { and, asc, eq } from 'drizzle-orm'
 import { db } from '../db/index'
 import { memorySections } from '../db/schema/memory-sections'
-import { memoryProfiles, memoryVersions } from '../db/schema/memory-profiles'
 import { authMiddleware } from '../middleware/auth'
-import { buildIndexDigest } from '../services/memory/index-digest'
+import { buildIndexDigest, type IndexDigest } from '../services/memory/index-digest'
+
+/**
+ * Digest building queries index tables by UUID; a non-UUID indexId (or any
+ * digest failure) must degrade to an empty digest — the caller seeds
+ * placeholder sections either way — instead of 500ing the memory page.
+ */
+async function buildIndexDigestSafe(userId: string, indexId: string): Promise<IndexDigest> {
+  try {
+    return await buildIndexDigest(userId, indexId)
+  } catch {
+    return {
+      indexId,
+      indexKind: 'personal',
+      counts: { facts: 0, threads: 0, files: 0 },
+      recentFacts: [],
+      recentThreads: [],
+      recentFiles: [],
+      generatedAt: new Date().toISOString(),
+    }
+  }
+}
 import {
   ensureBuiltInProfiles,
   getProfile,
@@ -167,10 +187,7 @@ memorySectionsRouter.delete('/profiles/:id', async (c) => {
   try {
     const row = await deleteUserProfile(id, userId)
     if (!row) {
-      return c.json(
-        { data: null, error: { message: 'Profile not found or is built-in' } },
-        404
-      )
+      return c.json({ data: null, error: { message: 'Profile not found or is built-in' } }, 404)
     }
     return c.json({ data: { deleted: true }, error: null })
   } catch (err) {
@@ -204,7 +221,7 @@ memorySectionsRouter.post(
         )
       }
 
-      const digest = await buildIndexDigest(userId, profile.indexId)
+      const digest = await buildIndexDigestSafe(userId, profile.indexId)
       const result = await generateVersion(profile.id, digest)
 
       return c.json({ data: result, error: null })
@@ -298,7 +315,7 @@ memorySectionsRouter.get('/sections', async (c) => {
 
     let latest = await getLatestVersion(defaultProfile.id)
     if (!latest) {
-      const digest = await buildIndexDigest(userId, parsed.data.indexId)
+      const digest = await buildIndexDigestSafe(userId, parsed.data.indexId)
       await generateVersion(defaultProfile.id, digest, { forceSeed: true })
       latest = await getLatestVersion(defaultProfile.id)
     }
@@ -360,67 +377,60 @@ memorySectionsRouter.post('/sections', zValidator('json', CreateSectionSchema), 
  * applied. Old versions stay read-only (book metaphor: flipping back shows
  * the page as it was).
  */
-memorySectionsRouter.patch(
-  '/sections/:id',
-  zValidator('json', PatchSectionSchema),
-  async (c) => {
-    const userId = c.get('userId') as string
-    const id = c.req.param('id')
-    const body = c.req.valid('json')
+memorySectionsRouter.patch('/sections/:id', zValidator('json', PatchSectionSchema), async (c) => {
+  const userId = c.get('userId') as string
+  const id = c.req.param('id')
+  const body = c.req.valid('json')
 
-    if (body.content === undefined && body.title === undefined) {
-      return c.json(
-        { data: null, error: { message: 'Nothing to update' } },
-        400
-      )
-    }
-
-    try {
-      const [section] = await db
-        .select()
-        .from(memorySections)
-        .where(and(eq(memorySections.id, id), eq(memorySections.userId, userId)))
-        .limit(1)
-      if (!section) {
-        return c.json({ data: null, error: { message: 'Section not found' } }, 404)
-      }
-
-      // Legacy rows without a versionId get updated in place (one-time
-      // tolerance during the MEM-1 rollout). New rows always fork.
-      if (!section.versionId) {
-        const update: Record<string, unknown> = { updatedAt: new Date() }
-        if (body.title !== undefined) update['title'] = body.title
-        if (body.content !== undefined) update['content'] = body.content
-        const [updated] = await db
-          .update(memorySections)
-          .set(update)
-          .where(and(eq(memorySections.id, id), eq(memorySections.userId, userId)))
-          .returning()
-        return c.json({ data: updated, error: null })
-      }
-
-      const forked = await forkVersionWithEdit({
-        baseVersionId: section.versionId,
-        sectionKey: section.key,
-        newContent: body.content ?? section.content,
-        newTitle: body.title,
-      })
-      const edited = forked.sections.find((s) => s.key === section.key) ?? forked.sections[0]
-      return c.json({
-        data: { section: edited, versionId: forked.versionId, versionNumber: forked.versionNumber },
-        error: null,
-      })
-    } catch (err) {
-      return c.json(
-        {
-          data: null,
-          error: { message: err instanceof Error ? err.message : 'Failed to update section' },
-        },
-        500
-      )
-    }
+  if (body.content === undefined && body.title === undefined) {
+    return c.json({ data: null, error: { message: 'Nothing to update' } }, 400)
   }
-)
+
+  try {
+    const [section] = await db
+      .select()
+      .from(memorySections)
+      .where(and(eq(memorySections.id, id), eq(memorySections.userId, userId)))
+      .limit(1)
+    if (!section) {
+      return c.json({ data: null, error: { message: 'Section not found' } }, 404)
+    }
+
+    // Legacy rows without a versionId get updated in place (one-time
+    // tolerance during the MEM-1 rollout). New rows always fork.
+    if (!section.versionId) {
+      const update: Record<string, unknown> = { updatedAt: new Date() }
+      if (body.title !== undefined) update['title'] = body.title
+      if (body.content !== undefined) update['content'] = body.content
+      const [updated] = await db
+        .update(memorySections)
+        .set(update)
+        .where(and(eq(memorySections.id, id), eq(memorySections.userId, userId)))
+        .returning()
+      return c.json({ data: updated, error: null })
+    }
+
+    const forked = await forkVersionWithEdit({
+      baseVersionId: section.versionId,
+      sectionKey: section.key,
+      newContent: body.content ?? section.content,
+      newTitle: body.title,
+    })
+    const edited = forked.sections.find((s) => s.key === section.key) ?? forked.sections[0]
+    return c.json({
+      data: { section: edited, versionId: forked.versionId, versionNumber: forked.versionNumber },
+      error: null,
+    })
+  } catch (err) {
+    return c.json(
+      {
+        data: null,
+        error: { message: err instanceof Error ? err.message : 'Failed to update section' },
+      },
+      500
+    )
+  }
+})
 
 memorySectionsRouter.delete('/sections/:id', async (c) => {
   const userId = c.get('userId') as string

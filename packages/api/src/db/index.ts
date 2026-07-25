@@ -21,8 +21,12 @@ async function initPglite() {
   const path = await import('path')
   const fs = await import('fs')
 
-  // Use file-based storage so data survives API restarts
-  const dataDir = path.join(process.cwd(), 'data', 'pglite')
+  // Use file-based storage so data survives API restarts. Under vitest,
+  // give each worker its own directory — parallel workers sharing one
+  // PGlite dir corrupt it (wasm aborts), which was the long-standing
+  // "integration flake" category.
+  const workerSuffix = process.env['VITEST_WORKER_ID'] ? `-w${process.env['VITEST_WORKER_ID']}` : ''
+  const dataDir = path.join(process.cwd(), 'data', `pglite${workerSuffix}`)
   fs.mkdirSync(dataDir, { recursive: true })
   const client = new PGlite(dataDir)
 
@@ -245,6 +249,17 @@ async function initPglite() {
     );
     CREATE INDEX IF NOT EXISTS chat_conv_snapshots_conv_idx
       ON chat_conversation_snapshots(conversation_id);
+
+    -- Group-conversation membership (schema/chat.ts chatConversationMembers).
+    -- Was missing from this hand-maintained DDL, which made every PGlite
+    -- request to GET /api/chat/conversations 500.
+    CREATE TABLE IF NOT EXISTS chat_conversation_members (
+      conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (conversation_id, user_id)
+    );
 
     -- knowledge.ts
     CREATE TABLE IF NOT EXISTS knowledge_docs (

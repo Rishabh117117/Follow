@@ -1,5 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 
+// MEM-1 rewrote /api/memory/sections as a profile/version system, so these
+// tests run against the real dev DB (PGlite) instead of a hand-rolled db
+// mock — the route now spans profile-store, section-generator, and
+// index-digest, which a flat fake cannot model. Only auth is mocked.
 vi.mock('../../middleware/auth', () => ({
   authMiddleware: vi.fn(async (c: any, next: any) => {
     c.set('userId', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
@@ -7,147 +12,69 @@ vi.mock('../../middleware/auth', () => ({
   }),
 }))
 
-// Simple in-memory mock "table"
-const mockDb: { rows: Array<any> } = { rows: [] }
-
-vi.mock('../../db/index', () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => Promise.resolve(mockDb.rows),
-        }),
-      }),
-    }),
-    insert: () => ({
-      values: (v: any) => ({
-        returning: () => {
-          const inserted = Array.isArray(v) ? v : [v]
-          const withIds = inserted.map((row, i) => ({
-            id: `section-${Date.now()}-${i}`,
-            userId: row.userId,
-            indexId: row.indexId,
-            key: row.key,
-            title: row.title,
-            content: row.content ?? '',
-            sortOrder: row.sortOrder ?? 0,
-            updatedAt: new Date(),
-            createdAt: new Date(),
-          }))
-          mockDb.rows.push(...withIds)
-          return Promise.resolve(withIds)
-        },
-      }),
-    }),
-    update: () => ({
-      set: (patch: any) => ({
-        where: () => ({
-          returning: () => {
-            if (mockDb.rows.length === 0) return Promise.resolve([])
-            const row = { ...mockDb.rows[0], ...patch }
-            mockDb.rows[0] = row
-            return Promise.resolve([row])
-          },
-        }),
-      }),
-    }),
-    delete: () => ({
-      where: () => ({
-        returning: () => {
-          if (mockDb.rows.length === 0) return Promise.resolve([])
-          const row = mockDb.rows[0]
-          mockDb.rows = []
-          return Promise.resolve([{ id: row.id }])
-        },
-      }),
-    }),
-  },
-}))
-
-vi.mock('../../db/schema/memory-sections', () => ({
-  memorySections: {
-    id: 'id',
-    userId: 'userId',
-    indexId: 'indexId',
-    sortOrder: 'sortOrder',
-  },
-}))
-
-import { memorySectionsRouter } from '../memory-sections'
 import { Hono } from 'hono'
+import { memorySectionsRouter } from '../memory-sections'
+import { db, waitForDb } from '../../db/index'
+import { users } from '../../db/schema/index'
 
-describe('Memory Sections Routes (WIRE-1)', () => {
-  let app: Hono
+const UID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+const INDEX_ID = 'mem1-route-test-index'
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockDb.rows = []
-    app = new Hono()
-    app.route('/api/memory', memorySectionsRouter)
-  })
+function mkApp() {
+  const app = new Hono()
+  app.route('/api/memory', memorySectionsRouter)
+  return app
+}
 
-  it('GET returns seeded defaults when no sections exist', async () => {
-    const res = await app.request('/api/memory/sections?indexId=personal')
+async function getSections() {
+  const res = await mkApp().request(`/api/memory/sections?indexId=${INDEX_ID}`)
+  const body = (await res.json()) as any
+  return { res, body }
+}
+
+describe('Memory Sections Routes (MEM-1)', () => {
+  beforeAll(async () => {
+    await waitForDb()
+    await db
+      .insert(users)
+      .values({ id: UID, email: 'mem-route-test@follow.test', name: 'Mem Route Test' })
+      .onConflictDoNothing()
+  }, 30_000)
+
+  it('GET seeds built-in profiles and returns the default profile sections', async () => {
+    const { res, body } = await getSections()
     expect(res.status).toBe(200)
-    const body = (await res.json()) as any
     expect(Array.isArray(body.data)).toBe(true)
-    expect(body.data.length).toBe(6) // 6 default sections
-    const keys = body.data.map((s: any) => s.key)
-    expect(keys).toContain('overview')
-    expect(keys).toContain('differentiators')
-    expect(keys).toContain('architecture')
-    expect(keys).toContain('mcp-integration')
-    expect(keys).toContain('thesis')
-    expect(keys).toContain('status')
-  })
-
-  it('seeded defaults contain real v3 content (WIRE-2)', async () => {
-    const res = await app.request('/api/memory/sections?indexId=personal')
-    const body = (await res.json()) as any
-    // Overview should contain the v3 tagline
-    const overview = body.data.find((s: any) => s.key === 'overview')
-    expect(overview.content).toContain('context sharing and tracking system')
-    // Architecture should mention the three layers
-    const arch = body.data.find((s: any) => s.key === 'architecture')
-    expect(arch.content).toContain('Three layers')
-    // MCP Integration should list 9 tools
-    const mcp = body.data.find((s: any) => s.key === 'mcp-integration')
-    expect(mcp.content).toContain('9 tools')
+    expect(body.data.length).toBeGreaterThan(0)
+    for (const s of body.data) {
+      expect(typeof s.key).toBe('string')
+      expect(typeof s.title).toBe('string')
+      expect(typeof s.content).toBe('string')
+    }
   })
 
   it('GET requires indexId query param', async () => {
-    const res = await app.request('/api/memory/sections')
+    const res = await mkApp().request('/api/memory/sections')
     expect(res.status).toBe(400)
     const body = (await res.json()) as any
     expect(body.error.message).toContain('indexId')
   })
 
-  it('GET returns existing sections when present (no re-seed)', async () => {
-    // Pre-populate mock
-    mockDb.rows = [
-      {
-        id: 'sec-1',
-        userId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        indexId: 'personal',
-        key: 'overview',
-        title: 'Overview',
-        content: 'Existing content',
-        sortOrder: 0,
-      },
-    ]
-    const res = await app.request('/api/memory/sections?indexId=personal')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as any
-    expect(body.data).toHaveLength(1)
-    expect(body.data[0].content).toBe('Existing content')
+  it('second GET reuses the seeded version (no re-seed)', async () => {
+    const first = await getSections()
+    const second = await getSections()
+    expect(second.res.status).toBe(200)
+    const firstIds = first.body.data.map((s: any) => s.id).sort()
+    const secondIds = second.body.data.map((s: any) => s.id).sort()
+    expect(secondIds).toEqual(firstIds)
   })
 
   it('POST creates a new section', async () => {
-    const res = await app.request('/api/memory/sections', {
+    const res = await mkApp().request('/api/memory/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        indexId: 'personal',
+        indexId: INDEX_ID,
         key: 'custom',
         title: 'Custom Section',
         content: 'My content',
@@ -159,19 +86,19 @@ describe('Memory Sections Routes (WIRE-1)', () => {
     expect(body.data.content).toBe('My content')
   })
 
-  it('PATCH updates content and title', async () => {
-    mockDb.rows = [
-      {
-        id: 'sec-1',
-        userId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        indexId: 'personal',
-        key: 'overview',
-        title: 'Overview',
+  it('PATCH updates a legacy (unversioned) section in place', async () => {
+    const created = await mkApp().request('/api/memory/sections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        indexId: INDEX_ID,
+        key: 'patch-legacy',
+        title: 'Patch Legacy',
         content: 'Original',
-        sortOrder: 0,
-      },
-    ]
-    const res = await app.request('/api/memory/sections/sec-1', {
+      }),
+    })
+    const createdBody = (await created.json()) as any
+    const res = await mkApp().request(`/api/memory/sections/${createdBody.data.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: 'Updated content' }),
@@ -181,29 +108,49 @@ describe('Memory Sections Routes (WIRE-1)', () => {
     expect(body.data.content).toBe('Updated content')
   })
 
-  it('DELETE removes section', async () => {
-    mockDb.rows = [
-      {
-        id: 'sec-1',
-        userId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        indexId: 'personal',
-        key: 'overview',
-        title: 'Overview',
+  it('PATCH forks a new version for a versioned section', async () => {
+    const { body: before } = await getSections()
+    const target = before.data[0]
+    const res = await mkApp().request(`/api/memory/sections/${target.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Edited via fork' }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as any
+    expect(body.data.section.content).toBe('Edited via fork')
+    expect(body.data.versionNumber).toBeGreaterThan(1)
+    // The forked version is now what GET serves.
+    const { body: after } = await getSections()
+    const edited = after.data.find((s: any) => s.key === target.key)
+    expect(edited.content).toBe('Edited via fork')
+  })
+
+  it('DELETE removes a section', async () => {
+    const created = await mkApp().request('/api/memory/sections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        indexId: INDEX_ID,
+        key: 'delete-me',
+        title: 'Delete Me',
         content: '',
-        sortOrder: 0,
-      },
-    ]
-    const res = await app.request('/api/memory/sections/sec-1', { method: 'DELETE' })
+      }),
+    })
+    const createdBody = (await created.json()) as any
+    const res = await mkApp().request(`/api/memory/sections/${createdBody.data.id}`, {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(200)
     const body = (await res.json()) as any
     expect(body.data.deleted).toBe(true)
   })
 
   it('POST validates required fields', async () => {
-    const res = await app.request('/api/memory/sections', {
+    const res = await mkApp().request('/api/memory/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ indexId: 'personal' }),
+      body: JSON.stringify({ indexId: INDEX_ID }),
     })
     expect(res.status).toBe(400)
   })

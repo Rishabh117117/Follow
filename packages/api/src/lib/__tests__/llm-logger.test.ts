@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- mock-heavy test file */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const insertedRows: Array<any> = []
@@ -62,13 +63,14 @@ describe('LLM Logger (WIRE-1)', () => {
       outputTokens: 500_000,
       source: 'chat',
     })
-    // Gemini Flash: $0.15/M input + $0.60/M output = $0.15 + $0.30 = $0.45
-    expect(insertedRows[0].costUsd).toBeCloseTo(0.45, 4)
+    // gemini-2.5-flash: $0.30/M input + $2.50/M output → 1M in + 0.5M out =
+    // $0.30 + $1.25 = $1.55 (pricing table updated to Google's current rates)
+    expect(insertedRows[0].costUsd).toBeCloseTo(1.55, 4)
   })
 
   it('calculateCost returns correct value for Gemini Flash', () => {
-    // 1M input + 1M output = $0.15 + $0.60 = $0.75
-    expect(calculateCost('gemini-2.5-flash', 1_000_000, 1_000_000)).toBeCloseTo(0.75, 4)
+    // 1M input + 1M output = $0.30 + $2.50 = $2.80
+    expect(calculateCost('gemini-2.5-flash', 1_000_000, 1_000_000)).toBeCloseTo(2.8, 4)
   })
 
   it('calculateCost returns correct value for DeepSeek v3', () => {

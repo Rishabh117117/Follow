@@ -21,6 +21,9 @@ interface EnvConfig {
 
   // Auth
   NEXTAUTH_SECRET: string | undefined
+  // AUTH-FIX-1: dedicated secret for the web-minted / API-verified bearer JWT
+  // (human identity). Must match the same var in the web service.
+  AUTH_API_SECRET: string | undefined
 
   // Flags
   isDev: boolean
@@ -39,6 +42,7 @@ function loadEnv(): EnvConfig {
     S3_ENDPOINT: process.env['S3_ENDPOINT'],
     OPENROUTER_API_KEY: process.env['OPENROUTER_API_KEY'],
     NEXTAUTH_SECRET: process.env['NEXTAUTH_SECRET'],
+    AUTH_API_SECRET: process.env['AUTH_API_SECRET'],
     isDev: process.env['NODE_ENV'] !== 'production',
     useDockerInfra:
       !!process.env['DATABASE_URL'] &&
@@ -66,6 +70,11 @@ export function validateEnv(): void {
   else infra.push(e.S3_ENDPOINT ? 'MinIO (S3)' : 'S3')
 
   if (!e.OPENROUTER_API_KEY) warnings.push('OPENROUTER_API_KEY not set — AI features will fail')
+
+  if (!e.AUTH_API_SECRET)
+    warnings.push(
+      'AUTH_API_SECRET not set — web bearer-token auth disabled; identity falls back to the x-user-id header (AUTH-FIX-1 dual-accept)'
+    )
 
   if (infra.length > 0) {
     console.info(`\u2705 Infrastructure: ${infra.join(', ')}`)
