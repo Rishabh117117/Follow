@@ -16,6 +16,7 @@ import {
   unlinkDocumentFromProjectStrand,
 } from '../services/project-strand-manager'
 import { EventBus } from '../events/EventBus'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 const spacesRouter = new Hono()
 spacesRouter.use('*', authMiddleware)
@@ -38,19 +39,23 @@ const UpdateSpaceSchema = z.object({
   color: z.string().max(20).nullable().optional(),
 })
 
-const AddDocumentSchema = z.object({
-  externalDocumentId: z.string().uuid().optional(),
-  fileId: z.string().uuid().optional(),
-}).refine(
-  (d) => d.externalDocumentId || d.fileId,
-  { message: 'Either externalDocumentId or fileId is required' }
-)
+const AddDocumentSchema = z
+  .object({
+    externalDocumentId: z.string().uuid().optional(),
+    fileId: z.string().uuid().optional(),
+  })
+  .refine((d) => d.externalDocumentId || d.fileId, {
+    message: 'Either externalDocumentId or fileId is required',
+  })
 
 // ─── Create Space ──────────────────────────────────────────────────
 
 spacesRouter.post('/', zValidator('json', CreateSpaceSchema), async (c) => {
   const body = c.req.valid('json')
   const userId = c.get('userId')
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   // 1. Create the canvas file for this space
   const [canvasFile] = await db
@@ -85,16 +90,9 @@ spacesRouter.post('/', zValidator('json', CreateSpaceSchema), async (c) => {
 
   // 4. If project, create project strand
   if (body.isProject) {
-    const { strandId } = await ensureProjectStrand(
-      body.workspaceId,
-      userId,
-      space!.id,
-      body.name
-    )
-    await db
-      .update(spaces)
-      .set({ strandId, updatedAt: new Date() })
-      .where(eq(spaces.id, space!.id))
+    const { strandId } = await ensureProjectStrand(body.workspaceId, userId, space!.id, body.name)
+    await db.update(spaces).set({ strandId, updatedAt: new Date() }).where(eq(spaces.id, space!.id))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- patch the in-memory row for the response
     ;(space as any).strandId = strandId
   }
 
@@ -124,7 +122,10 @@ spacesRouter.get('/', async (c) => {
     )
   }
 
-  let query = db
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
+  const query = db
     .select()
     .from(spaces)
     .where(and(eq(spaces.workspaceId, workspaceId), isNull(spaces.deletedAt)))
@@ -133,9 +134,10 @@ spacesRouter.get('/', async (c) => {
   const results = await query
 
   // Filter by isProject if specified
-  const filtered = isProject !== undefined
-    ? results.filter((s) => s.isProject === (isProject === 'true'))
-    : results
+  const filtered =
+    isProject !== undefined
+      ? results.filter((s) => s.isProject === (isProject === 'true'))
+      : results
 
   return c.json({ data: filtered, error: null })
 })
@@ -153,6 +155,9 @@ spacesRouter.get('/:id', async (c) => {
   if (!space) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
   }
+
+  const denied = await assertWorkspaceAccess(c, space.workspaceId)
+  if (denied) return denied
 
   // Fetch the canvas file
   let canvasFile = null
@@ -196,7 +201,8 @@ spacesRouter.get('/:id', async (c) => {
   }))
 
   // If project, fetch linked documents
-  let documents: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mixed doc shapes
+  const documents: any[] = []
   if (space.isProject) {
     const spaceDocs = await db
       .select()
@@ -256,6 +262,17 @@ spacesRouter.patch('/:id', zValidator('json', UpdateSpaceSchema), async (c) => {
   const spaceId = c.req.param('id')
   const body = c.req.valid('json')
 
+  const [existing] = await db
+    .select({ workspaceId: spaces.workspaceId })
+    .from(spaces)
+    .where(eq(spaces.id, spaceId))
+    .limit(1)
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
+
   const [updated] = await db
     .update(spaces)
     .set({ ...body, updatedAt: new Date() })
@@ -274,6 +291,17 @@ spacesRouter.patch('/:id', zValidator('json', UpdateSpaceSchema), async (c) => {
 spacesRouter.delete('/:id', async (c) => {
   const spaceId = c.req.param('id')
   const userId = c.get('userId')
+
+  const [existing] = await db
+    .select({ workspaceId: spaces.workspaceId })
+    .from(spaces)
+    .where(eq(spaces.id, spaceId))
+    .limit(1)
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
 
   const [deleted] = await db
     .update(spaces)
@@ -299,80 +327,74 @@ spacesRouter.delete('/:id', async (c) => {
 
 // ─── Add Document to Project ───────────────────────────────────────
 
-spacesRouter.post(
-  '/:id/documents',
-  zValidator('json', AddDocumentSchema),
-  async (c) => {
-    const spaceId = c.req.param('id')
-    const userId = c.get('userId')
-    const body = c.req.valid('json')
+spacesRouter.post('/:id/documents', zValidator('json', AddDocumentSchema), async (c) => {
+  const spaceId = c.req.param('id')
+  const userId = c.get('userId')
+  const body = c.req.valid('json')
 
-    // Verify space exists and is a project
-    const [space] = await db
-      .select()
-      .from(spaces)
-      .where(and(eq(spaces.id, spaceId), isNull(spaces.deletedAt)))
+  // Verify space exists and is a project
+  const [space] = await db
+    .select()
+    .from(spaces)
+    .where(and(eq(spaces.id, spaceId), isNull(spaces.deletedAt)))
 
-    if (!space) {
-      return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
-    }
-
-    if (!space.isProject) {
-      return c.json(
-        { data: null, error: { code: 'BAD_REQUEST', message: 'Space is not a project' } },
-        400
-      )
-    }
-
-    // Ensure project strand exists
-    if (!space.strandId) {
-      const { strandId } = await ensureProjectStrand(
-        space.workspaceId,
-        userId,
-        spaceId,
-        space.name
-      )
-      await db
-        .update(spaces)
-        .set({ strandId, updatedAt: new Date() })
-        .where(eq(spaces.id, spaceId))
-      space.strandId = strandId
-    }
-
-    // Insert space_documents record
-    const [spaceDoc] = await db
-      .insert(spaceDocuments)
-      .values({
-        spaceId,
-        externalDocumentId: body.externalDocumentId ?? null,
-        fileId: body.fileId ?? null,
-        addedBy: userId,
-      })
-      .onConflictDoNothing()
-      .returning()
-
-    if (!spaceDoc) {
-      return c.json({ data: null, error: { code: 'CONFLICT', message: 'Document already in project' } }, 409)
-    }
-
-    // Link document strand threads to project strand (if document has a strand)
-    let documentStrandId: string | null = null
-
-    if (body.externalDocumentId) {
-      const [ed] = await db
-        .select()
-        .from(externalDocuments)
-        .where(eq(externalDocuments.id, body.externalDocumentId))
-      documentStrandId = ed?.strandId ?? null
-    }
-
-    if (documentStrandId && space.strandId) {
-      await linkDocumentToProjectStrand(space.strandId, documentStrandId, userId)
-    }
-
-    return c.json({ data: spaceDoc, error: null }, 201)
+  if (!space) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
   }
-)
+
+  const denied = await assertWorkspaceAccess(c, space.workspaceId)
+  if (denied) return denied
+
+  if (!space.isProject) {
+    return c.json(
+      { data: null, error: { code: 'BAD_REQUEST', message: 'Space is not a project' } },
+      400
+    )
+  }
+
+  // Ensure project strand exists
+  if (!space.strandId) {
+    const { strandId } = await ensureProjectStrand(space.workspaceId, userId, spaceId, space.name)
+    await db.update(spaces).set({ strandId, updatedAt: new Date() }).where(eq(spaces.id, spaceId))
+    space.strandId = strandId
+  }
+
+  // Insert space_documents record
+  const [spaceDoc] = await db
+    .insert(spaceDocuments)
+    .values({
+      spaceId,
+      externalDocumentId: body.externalDocumentId ?? null,
+      fileId: body.fileId ?? null,
+      addedBy: userId,
+    })
+    .onConflictDoNothing()
+    .returning()
+
+  if (!spaceDoc) {
+    return c.json(
+      { data: null, error: { code: 'CONFLICT', message: 'Document already in project' } },
+      409
+    )
+  }
+
+  // Link document strand threads to project strand (if document has a strand)
+  let documentStrandId: string | null = null
+
+  if (body.externalDocumentId) {
+    const [ed] = await db
+      .select()
+      .from(externalDocuments)
+      .where(eq(externalDocuments.id, body.externalDocumentId))
+    documentStrandId = ed?.strandId ?? null
+  }
+
+  if (documentStrandId && space.strandId) {
+    await linkDocumentToProjectStrand(space.strandId, documentStrandId, userId)
+  }
+
+  return c.json({ data: spaceDoc, error: null }, 201)
+})
 
 // ─── Remove Document from Project ──────────────────────────────────
 
@@ -381,19 +403,26 @@ spacesRouter.delete('/:id/documents/:docId', async (c) => {
   const docId = c.req.param('docId')
 
   // Get space for project strand
-  const [space] = await db
-    .select()
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+  const [space] = await db.select().from(spaces).where(eq(spaces.id, spaceId))
+
+  if (!space) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, space.workspaceId)
+  if (denied) return denied
 
   // Get the space_documents record to find the document strand
+  // Scoped to this space so the guarded workspace actually owns the doc.
   const [spaceDoc] = await db
     .select()
     .from(spaceDocuments)
-    .where(eq(spaceDocuments.id, docId))
+    .where(and(eq(spaceDocuments.id, docId), eq(spaceDocuments.spaceId, spaceId)))
 
   if (!spaceDoc) {
-    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Document not found in project' } }, 404)
+    return c.json(
+      { data: null, error: { code: 'NOT_FOUND', message: 'Document not found in project' } },
+      404
+    )
   }
 
   // Unlink document strand threads from project strand
@@ -417,11 +446,23 @@ spacesRouter.delete('/:id/documents/:docId', async (c) => {
 spacesRouter.get('/:id/documents', async (c) => {
   const spaceId = c.req.param('id')
 
+  const [space] = await db
+    .select({ workspaceId: spaces.workspaceId })
+    .from(spaces)
+    .where(eq(spaces.id, spaceId))
+    .limit(1)
+  if (!space) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, space.workspaceId)
+  if (denied) return denied
+
   const spaceDocs = await db
     .select()
     .from(spaceDocuments)
     .where(eq(spaceDocuments.spaceId, spaceId))
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mixed doc shapes
   const results: any[] = []
 
   for (const sd of spaceDocs) {
@@ -468,10 +509,13 @@ spacesRouter.get('/:id/activity', async (c) => {
   const spaceId = c.req.param('id')
   const limit = parseInt(c.req.query('limit') ?? '50')
 
-  const [space] = await db
-    .select()
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
+  const [space] = await db.select().from(spaces).where(eq(spaces.id, spaceId))
+
+  if (!space) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Space not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, space.workspaceId)
+  if (denied) return denied
 
   if (!space?.strandId) {
     return c.json({ data: [], error: null })

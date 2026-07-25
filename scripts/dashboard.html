@@ -377,7 +377,7 @@ function useUsersStats() {
     let mounted = true;
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/users/stats');
+        const res = await authedFetch('http://localhost:3001/api/users/stats');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const json = await res.json();
         if (mounted) { setUsers(Array.isArray(json?.data) ? json.data : []); setError(false); }
@@ -2058,7 +2058,7 @@ function GraphTab({ initialFilter, initialView }) {
       const url = view === 'summary'
         ? 'http://localhost:3001/api/dev/graph/summary'
         : 'http://localhost:3001/api/dev/graph/' + view + (qs ? '?' + qs : '');
-      const res = await fetch(url);
+      const res = await authedFetch(url);
       const json = await res.json();
       if (json.error) { setError(json.error.message); return; }
       if (view === 'summary') setSummary(json.data || []);

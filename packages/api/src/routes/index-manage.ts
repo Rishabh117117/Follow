@@ -6,6 +6,7 @@
  */
 
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
@@ -14,6 +15,7 @@ import { indexRecords } from '../db/schema/semantic-index'
 import { rawFiles } from '../db/schema/raw-files'
 import { chatConversations, chatMessages } from '../db/schema/chat'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { storeRawFile } from '../services/raw-file-store'
 import { extractText } from '../services/raw-file-store/store'
 import { downloadBuffer } from '../lib/s3'
@@ -24,31 +26,9 @@ import { queueFileIndex } from '../services/indexing/file-indexer'
  * Per-conversation index wrapper: each chat_conversation can have at most
  * one raw_files row that represents its whole transcript, joined by
  * (source_type='chat_artifact', source_ref=<conversationId>). That row is
- * what the indexer consumes. The helpers below keep this contract in one
- * place so /status lookups and /:id/index enqueues agree.
+ * what the indexer consumes — /status resolves it inline and /:id/index
+ * creates it on demand via storeRawFile.
  */
-async function getConversationWrapperFile(
-  conversationId: string
-): Promise<{ id: string; deletedAt: Date | null; extractedText: string | null; version: number; workspaceId: string | null; fileName: string; fileSize: number; filePath: string | null } | null> {
-  const rows = await db
-    .select({
-      id: rawFiles.id,
-      deletedAt: rawFiles.deletedAt,
-      extractedText: rawFiles.extractedText,
-      version: rawFiles.version,
-      workspaceId: rawFiles.workspaceId,
-      fileName: rawFiles.fileName,
-      fileSize: rawFiles.fileSize,
-      filePath: rawFiles.filePath,
-    })
-    .from(rawFiles)
-    .where(
-      and(eq(rawFiles.sourceType, 'chat_artifact'), eq(rawFiles.sourceRef, conversationId))
-    )
-    .limit(1)
-  return rows[0] ?? null
-}
-
 async function buildConversationTranscript(conversationId: string): Promise<string> {
   const msgs = await db
     .select({ role: chatMessages.role, content: chatMessages.content })
@@ -61,10 +41,27 @@ async function buildConversationTranscript(conversationId: string): Promise<stri
 export const indexManageRouter = new Hono()
 indexManageRouter.use('*', authMiddleware)
 
+// SECURITY (security-gate-1): these lifecycle ops take a bare index-record id
+// with no ownership check — hide/forget/erase/delete of any workspace's record.
+// Guard each by the record's OWN workspace before mutating it.
+async function guardIndexRecordWorkspace(c: Context, recordId: string): Promise<Response | null> {
+  const [rec] = await db
+    .select({ workspaceId: indexRecords.workspaceId })
+    .from(indexRecords)
+    .where(eq(indexRecords.id, recordId))
+    .limit(1)
+  if (!rec) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Record not found' } }, 404)
+  }
+  return assertWorkspaceAccess(c, rec.workspaceId)
+}
+
 // ─── Hide / Unhide ──────────────────────────────────────────────────────────
 
 indexManageRouter.patch('/:id/hide', async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   await db
     .update(indexRecords)
     .set({ hidden: true, hiddenAt: new Date() })
@@ -75,6 +72,8 @@ indexManageRouter.patch('/:id/hide', async (c) => {
 
 indexManageRouter.patch('/:id/unhide', async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   await db
     .update(indexRecords)
     .set({ hidden: false, hiddenAt: null })
@@ -94,9 +93,7 @@ indexManageRouter.patch('/:id/unhide', async (c) => {
 // into per-record `forget` vs per-source `forget` so the user can choose.
 
 async function deleteIndexItem(id: string, deletedBy: string): Promise<void> {
-  const { tombstoneRecord, tombstoneSource } = await import(
-    '../services/pipeline/tombstone'
-  )
+  const { tombstoneRecord, tombstoneSource } = await import('../services/pipeline/tombstone')
 
   const [record] = await db
     .select({
@@ -155,6 +152,8 @@ const ForgetSchema = z
 
 indexManageRouter.post('/:id/forget', async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   const userId = c.get('userId') as string
   let scope: 'record' | 'source' = 'record'
   try {
@@ -165,9 +164,7 @@ indexManageRouter.post('/:id/forget', async (c) => {
     /* empty body is fine — defaults to 'record' */
   }
 
-  const { tombstoneRecord, tombstoneSource } = await import(
-    '../services/pipeline/tombstone'
-  )
+  const { tombstoneRecord, tombstoneSource } = await import('../services/pipeline/tombstone')
 
   if (scope === 'source') {
     const [record] = await db
@@ -217,12 +214,12 @@ const EraseSchema = z.object({
 
 indexManageRouter.post('/:id/erase', zValidator('json', EraseSchema), async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   const userId = c.get('userId') as string
   const { reason, scope } = c.req.valid('json')
 
-  const { tombstoneRecord, tombstoneSource } = await import(
-    '../services/pipeline/tombstone'
-  )
+  const { tombstoneRecord, tombstoneSource } = await import('../services/pipeline/tombstone')
   const { evidenceRecords } = await import('../db/schema/semantic-index')
 
   // Tombstone with reason='gdpr' so the audit row gets retentionPolicy='redacted'
@@ -285,6 +282,8 @@ indexManageRouter.post('/:id/erase', zValidator('json', EraseSchema), async (c) 
 
 indexManageRouter.post('/:id/restore', async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   const { restoreRecord } = await import('../services/pipeline/tombstone')
 
   // Block restore if the record was erased (retentionPolicy='redacted').
@@ -312,7 +311,10 @@ indexManageRouter.post('/:id/restore', async (c) => {
   const ok = await restoreRecord(id)
   if (!ok) {
     return c.json(
-      { data: null, error: { code: 'NOT_TOMBSTONED', message: 'Item is not currently tombstoned' } },
+      {
+        data: null,
+        error: { code: 'NOT_TOMBSTONED', message: 'Item is not currently tombstoned' },
+      },
       404
     )
   }
@@ -323,6 +325,8 @@ indexManageRouter.post('/:id/restore', async (c) => {
 // pre-2026-04-29 cascade behavior (scope='source').
 indexManageRouter.delete('/:id', async (c) => {
   const id = c.req.param('id')
+  const denied = await guardIndexRecordWorkspace(c, id)
+  if (denied) return denied
   const userId = c.get('userId') as string
   await deleteIndexItem(id, userId)
   return c.json({ data: { deleted: true }, error: null })
@@ -338,6 +342,18 @@ const BulkSchema = z.object({
 indexManageRouter.post('/bulk', zValidator('json', BulkSchema), async (c) => {
   const { action, ids } = c.req.valid('json')
   const userId = c.get('userId') as string
+
+  // Every id must belong to a workspace the caller can access — reject the
+  // whole batch otherwise (a mixed batch shouldn't partially mutate).
+  const owning = await db
+    .selectDistinct({ workspaceId: indexRecords.workspaceId })
+    .from(indexRecords)
+    .where(inArray(indexRecords.id, ids))
+  for (const row of owning) {
+    const denied = await assertWorkspaceAccess(c, row.workspaceId)
+    if (denied) return denied
+  }
+
   let affected = 0
 
   if (action === 'hide') {
@@ -345,12 +361,14 @@ indexManageRouter.post('/bulk', zValidator('json', BulkSchema), async (c) => {
       .update(indexRecords)
       .set({ hidden: true, hiddenAt: new Date() })
       .where(inArray(indexRecords.id, ids))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- driver-dependent result shape
     affected = (res as any)?.rowCount ?? ids.length
   } else if (action === 'unhide') {
     const res = await db
       .update(indexRecords)
       .set({ hidden: false, hiddenAt: null })
       .where(inArray(indexRecords.id, ids))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- driver-dependent result shape
     affected = (res as any)?.rowCount ?? ids.length
   } else if (action === 'delete') {
     for (const id of ids) {
@@ -373,6 +391,8 @@ indexManageRouter.post('/bulk', zValidator('json', BulkSchema), async (c) => {
 // paths, and by legacy clients like the Desktop Agent).
 
 indexManageRouter.post('/upload', async (c) => {
+  const denied = await assertWorkspaceAccess(c, c.get('workspaceId'))
+  if (denied) return denied
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
   const autoIndex = c.req.query('autoIndex') === 'true'
@@ -398,10 +418,7 @@ indexManageRouter.post('/upload', async (c) => {
   const rawPaths = formData.getAll('filePaths').map((v) => (typeof v === 'string' ? v : null))
 
   if (files.length === 0) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'No files provided' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'No files provided' } }, 400)
   }
 
   let uploaded = 0
@@ -421,8 +438,7 @@ indexManageRouter.post('/upload', async (c) => {
     // index AND it carries at least one path separator — a bare filename is
     // no better than `null` for tree construction.
     const rawPath = rawPaths[i] ?? null
-    const filePath =
-      rawPath && (rawPath.includes('/') || rawPath.includes('\\')) ? rawPath : null
+    const filePath = rawPath && (rawPath.includes('/') || rawPath.includes('\\')) ? rawPath : null
 
     const beforeVersion = await db
       .select({ id: rawFiles.id })
@@ -485,26 +501,36 @@ indexManageRouter.post('/:id/index', async (c) => {
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
 
-  let [record] = await db
-    .select()
-    .from(rawFiles)
-    .where(eq(rawFiles.id, id))
-    .limit(1)
+  let [record] = await db.select().from(rawFiles).where(eq(rawFiles.id, id)).limit(1)
+
+  if (record) {
+    const denied = await assertWorkspaceAccess(c, record.workspaceId)
+    if (denied) return denied
+  }
 
   // If the id isn't a raw_file, it may be a conversation id. Look up or
   // create a wrapper raw_file for its transcript, then fall through to
   // the usual enqueue path.
   if (!record) {
     const [convo] = await db
-      .select({ id: chatConversations.id, title: chatConversations.title, workspaceId: chatConversations.workspaceId })
+      .select({
+        id: chatConversations.id,
+        title: chatConversations.title,
+        workspaceId: chatConversations.workspaceId,
+      })
       .from(chatConversations)
       .where(eq(chatConversations.id, id))
       .limit(1)
     if (convo) {
+      const denied = await assertWorkspaceAccess(c, convo.workspaceId)
+      if (denied) return denied
       const transcript = await buildConversationTranscript(convo.id)
       if (!transcript || transcript.trim().length === 0) {
         return c.json(
-          { data: null, error: { code: 'NOT_INDEXABLE', message: 'Conversation has no messages to index.' } },
+          {
+            data: null,
+            error: { code: 'NOT_INDEXABLE', message: 'Conversation has no messages to index.' },
+          },
           400
         )
       }
@@ -517,20 +543,13 @@ indexManageRouter.post('/:id/index', async (c) => {
         sourceType: 'chat_artifact',
         sourceRef: convo.id,
       })
-      const [fresh] = await db
-        .select()
-        .from(rawFiles)
-        .where(eq(rawFiles.id, wrapped.id))
-        .limit(1)
+      const [fresh] = await db.select().from(rawFiles).where(eq(rawFiles.id, wrapped.id)).limit(1)
       record = fresh
     }
   }
 
   if (!record) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'Item not found' } },
-      404
-    )
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Item not found' } }, 404)
   }
 
   // On-demand extraction for files stored before PDF/binary parsers were
@@ -648,10 +667,7 @@ indexManageRouter.get('/status', async (c) => {
       })
       .from(rawFiles)
       .where(
-        and(
-          eq(rawFiles.sourceType, 'chat_artifact'),
-          inArray(rawFiles.sourceRef, unresolvedIds)
-        )
+        and(eq(rawFiles.sourceType, 'chat_artifact'), inArray(rawFiles.sourceRef, unresolvedIds))
       )
     for (const w of wrapperRows) {
       if (!w.sourceRef) continue
@@ -830,6 +846,8 @@ indexManageRouter.get('/tombstoned', async (c) => {
 })
 
 indexManageRouter.post('/paste', zValidator('json', PasteSchema), async (c) => {
+  const denied = await assertWorkspaceAccess(c, c.get('workspaceId'))
+  if (denied) return denied
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
   const { content, title, type } = c.req.valid('json')
@@ -839,7 +857,9 @@ indexManageRouter.post('/paste', zValidator('json', PasteSchema), async (c) => {
 
   const fileName =
     title ||
-    (type === 'url' ? `Pasted URL ${new Date().toISOString()}` : `Pasted text ${new Date().toISOString()}`)
+    (type === 'url'
+      ? `Pasted URL ${new Date().toISOString()}`
+      : `Pasted text ${new Date().toISOString()}`)
   const mimeType = type === 'url' ? 'text/uri-list' : 'text/plain'
 
   const record = await storeRawFile({
@@ -895,6 +915,8 @@ const ImportConvoSchema = z.object({
 })
 
 indexManageRouter.post('/import-conversation', zValidator('json', ImportConvoSchema), async (c) => {
+  const denied = await assertWorkspaceAccess(c, c.get('workspaceId'))
+  if (denied) return denied
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
   const { messages, source, title } = c.req.valid('json')
@@ -903,10 +925,14 @@ indexManageRouter.post('/import-conversation', zValidator('json', ImportConvoSch
   const spaceId = spaceIdHeader && spaceIdHeader !== 'personal' ? spaceIdHeader : undefined
 
   const chatSourceType =
-    source === 'claude' ? 'claude'
-      : source === 'chatgpt' ? 'chatgpt'
-        : source === 'cursor' ? 'cursor'
-          : source === 'gemini' ? 'gemini'
+    source === 'claude'
+      ? 'claude'
+      : source === 'chatgpt'
+        ? 'chatgpt'
+        : source === 'cursor'
+          ? 'cursor'
+          : source === 'gemini'
+            ? 'gemini'
             : 'custom'
 
   const [conversation] = await db
@@ -993,6 +1019,11 @@ indexManageRouter.post('/import-conversation', zValidator('json', ImportConvoSch
 
 indexManageRouter.get('/by-contributor', async (c) => {
   const requestingUserId = c.get('userId') as string
+  // SECURITY (security-gate-1): this previously aggregated across EVERY
+  // workspace's records. Scope it to the caller's workspace and guard access.
+  const workspaceId = c.get('workspaceId')
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const rows = await db
     .select({
       userId: indexRecords.userId,
@@ -1004,6 +1035,7 @@ indexManageRouter.get('/by-contributor', async (c) => {
     .from(indexRecords)
     .where(
       and(
+        eq(indexRecords.workspaceId, workspaceId!),
         eq(indexRecords.hidden, false),
         sql`${indexRecords.deletedAt} IS NULL`
       )
@@ -1012,7 +1044,13 @@ indexManageRouter.get('/by-contributor', async (c) => {
 
   const byUser = new Map<
     string,
-    { userId: string; name: string | null; factCount: number; fileCount: number; latestAt: Date | string | null }
+    {
+      userId: string
+      name: string | null
+      factCount: number
+      fileCount: number
+      latestAt: Date | string | null
+    }
   >()
   for (const row of rows) {
     const current = byUser.get(row.userId) ?? {
@@ -1024,15 +1062,15 @@ indexManageRouter.get('/by-contributor', async (c) => {
     }
     current.factCount++
     if (row.sourceFileId) current.fileCount++
-    if (!current.latestAt || (row.indexedAt && row.indexedAt > (current.latestAt as any))) {
+    if (!current.latestAt || (row.indexedAt && row.indexedAt > new Date(current.latestAt))) {
       current.latestAt = row.indexedAt
     }
     byUser.set(row.userId, current)
   }
 
   const contributors = Array.from(byUser.values()).sort((a, b) => {
-    const aT = a.latestAt ? new Date(a.latestAt as any).getTime() : 0
-    const bT = b.latestAt ? new Date(b.latestAt as any).getTime() : 0
+    const aT = a.latestAt ? new Date(a.latestAt).getTime() : 0
+    const bT = b.latestAt ? new Date(b.latestAt).getTime() : 0
     return bT - aT
   })
 

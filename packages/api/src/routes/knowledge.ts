@@ -4,6 +4,7 @@ import { db } from '../db/index'
 import { knowledgeDocs } from '../db/schema/knowledge'
 import { authMiddleware } from '../middleware/auth'
 import { vectorSearch } from '../services/vector-search'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 // KNOWLEDGE-EDGES-DROP-1 (2026-04-22): knowledge_edges table dropped.
 // The `/graph` endpoint now returns empty nodes + edges; every other
@@ -32,6 +33,9 @@ app.post('/search', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const limit = Math.min(body.limit ?? 5, 20)
 
@@ -77,6 +81,9 @@ app.get('/docs', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const results = await db
     .select()
     .from(knowledgeDocs)
@@ -102,6 +109,11 @@ app.get('/docs/:id', async (c) => {
   if (!doc) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Doc not found' } }, 404)
   }
+
+  // The doc is loaded by id only, so guard on the doc's own workspace to stop
+  // a caller reading a knowledge doc belonging to a workspace they aren't in.
+  const denied = await assertWorkspaceAccess(c, doc.workspaceId)
+  if (denied) return denied
 
   return c.json({ data: doc, error: null })
 })
@@ -131,6 +143,9 @@ app.get('/stats', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const docs = await db
     .select()
@@ -169,6 +184,9 @@ app.post('/search/semantic', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const results = await vectorSearch({
     query: body.query,

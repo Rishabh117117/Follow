@@ -56,6 +56,13 @@ vi.mock('../../db/index', () => ({
   db: {},
 }))
 
+// security-gate-1: the REST wrapper guards the session workspace before
+// getOrCreateSession; membership has its own tests — mock permissive here.
+vi.mock('../../services/workspace-access', () => ({
+  assertWorkspaceAccess: vi.fn().mockResolvedValue(null),
+  checkWorkspaceAccess: vi.fn().mockResolvedValue({ ok: true, role: 'owner' }),
+}))
+
 // Mock auth middleware — pass through
 vi.mock('../../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation(async (_c: unknown, next: () => Promise<void>) => {
@@ -64,8 +71,8 @@ vi.mock('../../middleware/auth', () => ({
 }))
 
 vi.mock('../../middleware/api-key-auth', () => ({
-  createFlexAuthMiddleware: () =>
-    async (c: { set: (key: string, val: string) => void }, next: () => Promise<void>) => {
+  createFlexAuthMiddleware:
+    () => async (c: { set: (key: string, val: string) => void }, next: () => Promise<void>) => {
       c.set('userId', 'test-user')
       c.set('workspaceId', 'test-ws')
       await next()

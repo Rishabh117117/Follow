@@ -11,6 +11,7 @@ import { createFlexAuthMiddleware } from '../middleware/api-key-auth'
 import { authMiddleware } from '../middleware/auth'
 import { mcpTools } from '../mcp/tools/index'
 import { getOrCreateSession, recordToolCall } from '../mcp/transport'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import type { MCPDependencies } from '../mcp/types'
 
 function inferRestClientName(userAgent: string | undefined): string {
@@ -55,6 +56,11 @@ for (const tool of mcpTools) {
       body = (await c.req.json()) as Record<string, unknown>
     } catch {
       // Empty body is fine for tools with no required params
+    }
+
+    if (workspaceId) {
+      const denied = await assertWorkspaceAccess(c, workspaceId)
+      if (denied) return denied
     }
 
     const session = await getOrCreateSession(userId, workspaceId, {

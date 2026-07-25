@@ -15,7 +15,11 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
+import { eq } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
+import { db } from '../db/index'
+import { sessions } from '../db/schema/sessions'
 import { openSession, heartbeat, closeSession } from '../services/sessions'
 
 export const sessionsRouter = new Hono()
@@ -39,6 +43,8 @@ const OpenSchema = z.object({
 sessionsRouter.post('/', zValidator('json', OpenSchema), async (c) => {
   const userId = c.get('userId') as string
   const body = c.req.valid('json')
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
   try {
     const session = await openSession({
       userId,
@@ -53,7 +59,10 @@ sessionsRouter.post('/', zValidator('json', OpenSchema), async (c) => {
     })
   } catch (e: unknown) {
     return c.json(
-      { data: null, error: { code: 'OPEN_FAILED', message: e instanceof Error ? e.message : String(e) } },
+      {
+        data: null,
+        error: { code: 'OPEN_FAILED', message: e instanceof Error ? e.message : String(e) },
+      },
       500
     )
   }
@@ -61,6 +70,16 @@ sessionsRouter.post('/', zValidator('json', OpenSchema), async (c) => {
 
 sessionsRouter.post('/:id/heartbeat', async (c) => {
   const id = c.req.param('id')
+  const [session] = await db
+    .select({ workspaceId: sessions.workspaceId })
+    .from(sessions)
+    .where(eq(sessions.id, id))
+    .limit(1)
+  if (!session) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, session.workspaceId)
+  if (denied) return denied
   await heartbeat(id)
   return c.json({ data: { ok: true }, error: null })
 })
@@ -73,6 +92,16 @@ const CloseSchema = z
 
 sessionsRouter.post('/:id/close', async (c) => {
   const id = c.req.param('id')
+  const [session] = await db
+    .select({ workspaceId: sessions.workspaceId })
+    .from(sessions)
+    .where(eq(sessions.id, id))
+    .limit(1)
+  if (!session) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, session.workspaceId)
+  if (denied) return denied
   let reason: 'explicit' | 'disconnect' = 'explicit'
   try {
     const body = await c.req.json()

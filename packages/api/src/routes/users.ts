@@ -1,24 +1,40 @@
 import { Hono } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { eq, sql } from 'drizzle-orm'
 import { CreateUserSchema, UpdateUserSchema } from '@workspace/shared/schemas'
 import { db } from '../db/index'
 import { users } from '../db/schema/index'
+import { authMiddleware } from '../middleware/auth'
+import { dashboardTokenMiddleware } from '../middleware/dashboard-token'
 
 export const usersRouter = new Hono()
 
-/**
- * GET / - List all users
- */
-usersRouter.get('/', async (c) => {
-  const allUsers = await db.select().from(users)
-  return c.json({ data: allUsers, error: null })
-})
+// SECURITY (security-gate-1): this router was previously mounted with NO auth —
+// anyone could list every user's email or DELETE any account. It is not part of
+// the user-facing web surface (the app uses /api/users/me for self-service and
+// /api/auth for login); it is an operator/dev-console surface plus per-user
+// self-mutation. So:
+//   • cross-user reads (list, stats, get-by-id, create) → operator only
+//     (dashboardTokenMiddleware: the dev console sends X-Dashboard-Token; in prod
+//     without a token it 503s; dev-open only when no token is configured).
+//   • per-user mutations (update, delete) → authenticated AND self only.
+
+/** Reject unless the caller is acting on their own user row. */
+const selfOnly: MiddlewareHandler = async (c, next) => {
+  if (c.get('userId') !== c.req.param('id')) {
+    return c.json(
+      { data: null, error: { code: 'FORBIDDEN', message: 'You can only modify your own account' } },
+      403
+    )
+  }
+  await next()
+}
 
 /**
  * GET /stats - List users with aggregate counts (files, llm cost) for the dashboard.
  */
-usersRouter.get('/stats', async (c) => {
+usersRouter.get('/stats', dashboardTokenMiddleware, async (c) => {
   try {
     const rows = await db.execute(sql`
       SELECT
@@ -81,9 +97,17 @@ usersRouter.get('/stats', async (c) => {
 })
 
 /**
- * GET /:id - Get a user by ID
+ * GET / - List all users (operator only — leaks every user's email).
  */
-usersRouter.get('/:id', async (c) => {
+usersRouter.get('/', dashboardTokenMiddleware, async (c) => {
+  const allUsers = await db.select().from(users)
+  return c.json({ data: allUsers, error: null })
+})
+
+/**
+ * GET /:id - Get a user by ID (any authenticated caller).
+ */
+usersRouter.get('/:id', authMiddleware, async (c) => {
   const id = c.req.param('id')
   const [user] = await db.select().from(users).where(eq(users.id, id))
 
@@ -95,9 +119,9 @@ usersRouter.get('/:id', async (c) => {
 })
 
 /**
- * POST / - Create a new user
+ * POST / - Create a new user (operator only; real signups go through /api/auth).
  */
-usersRouter.post('/', zValidator('json', CreateUserSchema), async (c) => {
+usersRouter.post('/', dashboardTokenMiddleware, zValidator('json', CreateUserSchema), async (c) => {
   const body = c.req.valid('json')
 
   const [created] = await db
@@ -113,25 +137,31 @@ usersRouter.post('/', zValidator('json', CreateUserSchema), async (c) => {
 })
 
 /**
- * PATCH /:id - Update a user
+ * PATCH /:id - Update a user (authenticated, self only).
  */
-usersRouter.patch('/:id', zValidator('json', UpdateUserSchema), async (c) => {
-  const id = c.req.param('id')
-  const body = c.req.valid('json')
+usersRouter.patch(
+  '/:id',
+  authMiddleware,
+  selfOnly,
+  zValidator('json', UpdateUserSchema),
+  async (c) => {
+    const id = c.req.param('id')
+    const body = c.req.valid('json')
 
-  const [updated] = await db.update(users).set(body).where(eq(users.id, id)).returning()
+    const [updated] = await db.update(users).set(body).where(eq(users.id, id)).returning()
 
-  if (!updated) {
-    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404)
+    if (!updated) {
+      return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404)
+    }
+
+    return c.json({ data: updated, error: null })
   }
-
-  return c.json({ data: updated, error: null })
-})
+)
 
 /**
- * DELETE /:id - Delete a user
+ * DELETE /:id - Delete a user (authenticated, self only).
  */
-usersRouter.delete('/:id', async (c) => {
+usersRouter.delete('/:id', authMiddleware, selfOnly, async (c) => {
   const id = c.req.param('id')
 
   const [deleted] = await db.delete(users).where(eq(users.id, id)).returning()

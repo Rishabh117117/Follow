@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { db } from '../db/index'
 import { webhooks, apiKeys } from '../db/schema/collaboration'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { createHmac, randomBytes } from 'crypto'
 import { nanoid } from 'nanoid'
 
@@ -13,14 +14,10 @@ app.use('*', authMiddleware)
 // ─── List webhooks ───────────────────────────────────────────────────
 app.get('/', async (c) => {
   const workspaceId = c.req.query('workspaceId')
-  if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'workspaceId required' } },
-      400
-    )
-  }
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
-  const results = await db.select().from(webhooks).where(eq(webhooks.workspaceId, workspaceId))
+  const results = await db.select().from(webhooks).where(eq(webhooks.workspaceId, workspaceId!))
 
   // Don't expose secrets
   return c.json({
@@ -44,6 +41,9 @@ app.post('/', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const secret = randomBytes(32).toString('hex')
 
@@ -77,6 +77,9 @@ app.patch('/:id', async (c) => {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Webhook not found' } }, 404)
   }
 
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
+
   const [updated] = await db
     .update(webhooks)
     .set({
@@ -92,6 +95,17 @@ app.patch('/:id', async (c) => {
 
 // ─── Delete webhook ──────────────────────────────────────────────────
 app.delete('/:id', async (c) => {
+  const [existing] = await db
+    .select({ workspaceId: webhooks.workspaceId })
+    .from(webhooks)
+    .where(eq(webhooks.id, c.req.param('id')))
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Webhook not found' } }, 404)
+  }
+
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
+
   await db.delete(webhooks).where(eq(webhooks.id, c.req.param('id')))
   return c.json({ data: { success: true }, error: null })
 })
@@ -101,14 +115,10 @@ app.delete('/:id', async (c) => {
 // List API keys
 app.get('/api-keys', async (c) => {
   const workspaceId = c.req.query('workspaceId')
-  if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'workspaceId required' } },
-      400
-    )
-  }
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
-  const results = await db.select().from(apiKeys).where(eq(apiKeys.workspaceId, workspaceId))
+  const results = await db.select().from(apiKeys).where(eq(apiKeys.workspaceId, workspaceId!))
 
   return c.json({
     data: results.map((k) => ({
@@ -139,6 +149,11 @@ app.post('/api-keys', async (c) => {
       400
     )
   }
+
+  // Minting a wsp_ key grants its holder access to the workspace — the caller
+  // must belong to it.
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const rawKey = `wsp_${nanoid(40)}`
   const keyHash = createHmac('sha256', 'workspace-api-keys').update(rawKey).digest('hex')
@@ -182,6 +197,17 @@ app.post('/api-keys', async (c) => {
 
 // Delete API key
 app.delete('/api-keys/:id', async (c) => {
+  const [existing] = await db
+    .select({ workspaceId: apiKeys.workspaceId })
+    .from(apiKeys)
+    .where(eq(apiKeys.id, c.req.param('id')))
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'API key not found' } }, 404)
+  }
+
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
+
   await db.delete(apiKeys).where(eq(apiKeys.id, c.req.param('id')))
   return c.json({ data: { success: true }, error: null })
 })

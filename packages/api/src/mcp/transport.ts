@@ -23,6 +23,7 @@ import {
   heartbeatBySurface as heartbeatDbSession,
 } from '../services/sessions'
 import { getActiveProjectId } from '../services/mcp/active-project'
+import { assertWorkspaceAccess, checkWorkspaceAccess } from '../services/workspace-access'
 import type {
   MCPSession,
   JsonRpcRequest,
@@ -56,6 +57,12 @@ async function getOrCreateSession(
   workspaceId: string,
   opts: { clientName?: string; transport?: string } = {}
 ): Promise<MCPSession> {
+  // SECURITY (security-gate-1): workspace MEMBERSHIP for the session's workspace
+  // is enforced at the HTTP boundary (the /mcp GET/POST + /api/mcp-rest handlers
+  // call assertWorkspaceAccess before this). Keeping that check out of here lets
+  // the session-bookkeeping stay a pure in-memory helper. The activeProjectId
+  // re-check below IS here because it's session-hydration state, not a caller
+  // input.
   const key = `${userId}:${workspaceId}`
   const existing = sessions.get(key)
 
@@ -73,6 +80,14 @@ async function getOrCreateSession(
   let activeProjectId: string | null = null
   try {
     activeProjectId = await getActiveProjectId(userId, workspaceId)
+    // TOCTOU (security-gate-1): set_scope verified membership when it wrote
+    // mcp_active_project, but membership can be revoked afterwards. Re-verify
+    // at rehydration; if the user no longer has access, silently drop to
+    // personal rather than serving the project's data.
+    if (activeProjectId) {
+      const access = await checkWorkspaceAccess(userId, activeProjectId)
+      if (!access.ok) activeProjectId = null
+    }
   } catch (err) {
     console.error('[mcp] getActiveProjectId failed; defaulting to personal:', err)
   }
@@ -145,10 +160,18 @@ export function getActiveClients(): MCPClientInfo[] {
 
 export function getToolAggregates(): MCPToolAggregate[] {
   // Aggregate across all sessions per tool name
-  const agg = new Map<string, { count: number; totalLatencyMs: number; errors: number; lastCalledAt: Date | null }>()
+  const agg = new Map<
+    string,
+    { count: number; totalLatencyMs: number; errors: number; lastCalledAt: Date | null }
+  >()
   for (const session of sessions.values()) {
     for (const [toolName, m] of Object.entries(session.toolCalls)) {
-      const cur = agg.get(toolName) ?? { count: 0, totalLatencyMs: 0, errors: 0, lastCalledAt: null }
+      const cur = agg.get(toolName) ?? {
+        count: 0,
+        totalLatencyMs: 0,
+        errors: 0,
+        lastCalledAt: null,
+      }
       cur.count += m.count
       cur.totalLatencyMs += m.totalLatencyMs
       cur.errors += m.errors
@@ -206,6 +229,13 @@ mcpRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
   const clientName = inferClientName(c.req.header('user-agent'), c.req.header('referer'))
+
+  // Membership guard: a non-empty workspace is caller-supplied (header) unless a
+  // wsp_ key pinned it — the caller must belong to it. Empty = personal scope.
+  if (workspaceId) {
+    const denied = await assertWorkspaceAccess(c, workspaceId)
+    if (denied) return denied
+  }
 
   const session = await getOrCreateSession(userId, workspaceId, {
     clientName,
@@ -290,6 +320,17 @@ mcpRoutes.post('/', async (c) => {
   const workspaceId = (c.get('workspaceId') as string) ?? ''
   const clientName = inferClientName(c.req.header('user-agent'), c.req.header('referer'))
 
+  // Membership guard (JSON-RPC error shape to match this endpoint's responses).
+  if (workspaceId) {
+    const access = await checkWorkspaceAccess(userId, workspaceId)
+    if (!access.ok) {
+      return c.json(
+        { jsonrpc: '2.0', id: null, error: { code: -32001, message: access.message } },
+        access.status
+      )
+    }
+  }
+
   const session = await getOrCreateSession(userId, workspaceId, {
     clientName,
     transport: 'MCP SSE',
@@ -328,7 +369,11 @@ mcpRoutes.post('/', async (c) => {
     const latency = Date.now() - startedAt
     const isError =
       !!response.error ||
-      !!(response.result && typeof response.result === 'object' && (response.result as Record<string, unknown>)['isError'])
+      !!(
+        response.result &&
+        typeof response.result === 'object' &&
+        (response.result as Record<string, unknown>)['isError']
+      )
     recordToolCall(session, toolName, latency, isError)
 
     // Heartbeat the user's active MCP session row, if any. Best-effort —

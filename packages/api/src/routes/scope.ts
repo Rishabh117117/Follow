@@ -11,7 +11,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../db/index'
 import { scopeSessions } from '../db/schema/scope'
 import { authMiddleware } from '../middleware/auth'
@@ -39,6 +39,7 @@ import {
   endLiveContext,
   getLiveContextSlice,
 } from '../services/live-context'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 export const scopeRouter = new Hono()
 scopeRouter.use('*', authMiddleware)
@@ -101,6 +102,9 @@ scopeRouter.post('/', zValidator('json', setScopeSchema), async (c) => {
   const body = c.req.valid('json')
   const sessionToken = sessionTokenFor(userId, workspaceId)
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   let effective: Boundary[] = body.boundaries ?? []
   let scopeDefinitionId: string | undefined
   let name: string | undefined
@@ -108,10 +112,7 @@ scopeRouter.post('/', zValidator('json', setScopeSchema), async (c) => {
   if (body.presetId) {
     const preset = await getPresetById(body.presetId)
     if (!preset) {
-      return c.json(
-        { data: null, error: { code: 'NOT_FOUND', message: 'Preset not found' } },
-        404
-      )
+      return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Preset not found' } }, 404)
     }
     effective = preset.boundaries
     scopeDefinitionId = body.presetId
@@ -185,12 +186,7 @@ scopeRouter.get('/active', async (c) => {
       mode: scopeSessions.mode,
     })
     .from(scopeSessions)
-    .where(
-      and(
-        eq(scopeSessions.sessionToken, sessionToken),
-        eq(scopeSessions.userId, userId)
-      )
-    )
+    .where(and(eq(scopeSessions.sessionToken, sessionToken), eq(scopeSessions.userId, userId)))
     .orderBy(desc(scopeSessions.activatedAt))
     .limit(1)
   const row = rows[0]
@@ -244,10 +240,7 @@ scopeRouter.post('/presets/:id/apply', async (c) => {
 
   const preset = await getPresetById(id)
   if (!preset) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'Preset not found' } },
-      404
-    )
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Preset not found' } }, 404)
   }
 
   const scope = buildScopeFromBoundaries({
@@ -303,6 +296,9 @@ scopeRouter.post('/validate', zValidator('json', validateSchema), async (c) => {
   const workspaceId = c.get('workspaceId') ?? 'default'
   const body = c.req.valid('json')
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const intraValidation = validateScopeBoundaries(body.boundaries)
   const scope = buildScopeFromBoundaries({
     userId,
@@ -330,6 +326,8 @@ scopeRouter.post('/validate', zValidator('json', validateSchema), async (c) => {
 scopeRouter.get('/preview', async (c) => {
   const userId = c.get('userId')
   const workspaceId = c.get('workspaceId') ?? 'default'
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const raw = c.req.query('boundaries') ?? '[]'
   let boundaries: Boundary[]
   try {
@@ -367,6 +365,9 @@ scopeRouter.post('/parse-nl', zValidator('json', parseNlSchema), async (c) => {
   const userId = c.get('userId')
   const workspaceId = c.get('workspaceId') ?? 'default'
   const { text } = c.req.valid('json')
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const result = await parseScopeFromNL({ text, userId, workspaceId })
 

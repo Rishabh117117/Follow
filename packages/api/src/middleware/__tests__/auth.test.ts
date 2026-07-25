@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Hono } from 'hono'
 import { SignJWT } from 'jose'
 import { API_TOKEN_ISSUER, API_TOKEN_AUDIENCE } from '../../lib/api-token'
+import { DEV_USER } from '@workspace/shared/constants'
 
 // Mock the DB: authMiddleware does `const [user] = await db.select().from(users).where(...)`
 const mockWhere = vi.fn()
@@ -40,11 +41,12 @@ async function buildApp() {
   return app
 }
 
-describe('authMiddleware — AUTH-FIX-1 dual-accept', () => {
+describe('authMiddleware — Phase 3 (verified credentials only)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.DEV_BYPASS_AUTH = 'false'
     process.env.AUTH_API_SECRET = SECRET
+    delete process.env.AUTH_ACCEPT_LEGACY_USER_HEADER
   })
 
   it('valid bearer JWT → identity from the verified sub claim', async () => {
@@ -71,7 +73,7 @@ describe('authMiddleware — AUTH-FIX-1 dual-accept', () => {
     expect(((await res.json()) as { userId: string }).userId).toBe('user-from-token')
   })
 
-  it('expired bearer JWT + no x-user-id → 401', async () => {
+  it('expired bearer JWT → 401', async () => {
     const token = await mint('user-from-token', { expSeconds: -10 })
     const res = await (
       await buildApp()
@@ -81,7 +83,7 @@ describe('authMiddleware — AUTH-FIX-1 dual-accept', () => {
     expect(res.status).toBe(401)
   })
 
-  it('tampered/wrong-secret bearer JWT + no x-user-id → 401', async () => {
+  it('tampered/wrong-secret bearer JWT → 401', async () => {
     const token = await mint('user-from-token', { secret: 'a-totally-different-secret-999999' })
     const res = await (
       await buildApp()
@@ -91,7 +93,34 @@ describe('authMiddleware — AUTH-FIX-1 dual-accept', () => {
     expect(res.status).toBe(401)
   })
 
-  it('no token + valid x-user-id header → 200 (dual-accept still honors the legacy path)', async () => {
+  it('IMPERSONATION CLOSED: x-user-id header alone → 401, identity never resolved', async () => {
+    const res = await (
+      await buildApp()
+    ).request('http://localhost/test', {
+      headers: { 'x-user-id': 'victim-user-id' },
+    })
+    expect(res.status).toBe(401)
+    expect(mockWhere).not.toHaveBeenCalled()
+  })
+
+  it('IMPERSONATION CLOSED: invalid bearer + x-user-id header → 401 (no fallthrough)', async () => {
+    const badToken = await mint('someone', { secret: 'wrong-secret-aaaaaaaaaaaaaaaa' })
+    const res = await (
+      await buildApp()
+    ).request('http://localhost/test', {
+      headers: { Authorization: `Bearer ${badToken}`, 'x-user-id': 'victim-user-id' },
+    })
+    expect(res.status).toBe(401)
+    expect(mockWhere).not.toHaveBeenCalled()
+  })
+
+  it('no credentials at all → 401', async () => {
+    const res = await (await buildApp()).request('http://localhost/test')
+    expect(res.status).toBe(401)
+  })
+
+  it('break-glass flag re-enables the legacy header path (emergency rollback)', async () => {
+    process.env.AUTH_ACCEPT_LEGACY_USER_HEADER = 'true'
     mockWhere.mockResolvedValueOnce([{ ...USER_ROW, id: 'header-user' }])
     const res = await (
       await buildApp()
@@ -102,20 +131,22 @@ describe('authMiddleware — AUTH-FIX-1 dual-accept', () => {
     expect(((await res.json()) as { userId: string }).userId).toBe('header-user')
   })
 
-  it('no token + no header → 401', async () => {
-    const res = await (await buildApp()).request('http://localhost/test')
-    expect(res.status).toBe(401)
-  })
-
-  it('invalid bearer + valid x-user-id → falls through to header (extension dual-accept)', async () => {
+  it('DEV_BYPASS_AUTH keeps header identity for local dev clients', async () => {
+    process.env.DEV_BYPASS_AUTH = 'true'
     mockWhere.mockResolvedValueOnce([{ ...USER_ROW, id: 'ext-user' }])
-    const badToken = await mint('someone', { secret: 'wrong-secret-aaaaaaaaaaaaaaaa' })
     const res = await (
       await buildApp()
     ).request('http://localhost/test', {
-      headers: { Authorization: `Bearer ${badToken}`, 'x-user-id': 'ext-user' },
+      headers: { 'x-user-id': 'ext-user' },
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as { userId: string }).userId).toBe('ext-user')
+  })
+
+  it('DEV_BYPASS_AUTH with no header falls back to the seeded dev user', async () => {
+    process.env.DEV_BYPASS_AUTH = 'true'
+    const res = await (await buildApp()).request('http://localhost/test')
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { userId: string }).userId).toBe(DEV_USER.id)
   })
 })

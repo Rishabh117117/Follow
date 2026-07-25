@@ -8,10 +8,11 @@
  */
 
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { authMiddleware } from '../middleware/auth'
-import { requirePermission } from '../middleware/permissions'
+import { checkWorkspaceAccess } from '../services/workspace-access'
 import { db } from '../db/index'
 import { eq, and, desc } from 'drizzle-orm'
 import { indexRecords, evidenceRecords } from '../db/schema/semantic-index'
@@ -20,6 +21,41 @@ import { computeRecordHash, getLastEvidenceHash } from '../services/semantic-ind
 const adminRouter = new Hono()
 adminRouter.use('*', authMiddleware)
 
+// SECURITY (security-gate-1): these routes previously used
+// requirePermission('admin'), which reads the workspace from the x-workspace-id
+// HEADER — but every handler mutates body.workspaceId (or a resolved doc's
+// workspace). An admin of their own workspace could set the header to their own
+// and target another workspace in the body. Guard the workspace ACTUALLY being
+// mutated, requiring owner/admin there.
+async function assertWorkspaceAdmin(
+  c: Context,
+  workspaceId: string | undefined | null
+): Promise<Response | null> {
+  if (!workspaceId) {
+    return c.json(
+      { data: null, error: { code: 'BAD_REQUEST', message: 'workspaceId required' } },
+      400
+    )
+  }
+  const access = await checkWorkspaceAccess(c.get('userId'), workspaceId)
+  if (!access.ok) {
+    return c.json(
+      {
+        data: null,
+        error: { code: access.status === 404 ? 'NOT_FOUND' : 'FORBIDDEN', message: access.message },
+      },
+      access.status
+    )
+  }
+  if (access.role !== 'owner' && access.role !== 'admin') {
+    return c.json(
+      { data: null, error: { code: 'FORBIDDEN', message: 'Requires admin role or higher' } },
+      403
+    )
+  }
+  return null
+}
+
 // ─── GDPR Redaction ──────────────────────────────────────────────────────────
 
 const RedactSchema = z.object({
@@ -27,9 +63,12 @@ const RedactSchema = z.object({
   workspaceId: z.string().uuid(),
 })
 
-adminRouter.post('/gdpr-redact', requirePermission('admin'), zValidator('json', RedactSchema), async (c) => {
+adminRouter.post('/gdpr-redact', zValidator('json', RedactSchema), async (c) => {
   const body = c.req.valid('json')
   const { targetUserId, workspaceId } = body
+
+  const denied = await assertWorkspaceAdmin(c, workspaceId)
+  if (denied) return denied
 
   // Check for legal holds on any documents this user contributed to
   const userDocs = await db
@@ -148,9 +187,12 @@ const LegalHoldSchema = z.object({
   reason: z.string().min(1),
 })
 
-adminRouter.post('/legal-hold', requirePermission('admin'), zValidator('json', LegalHoldSchema), async (c) => {
+adminRouter.post('/legal-hold', zValidator('json', LegalHoldSchema), async (c) => {
   const userId = c.get('userId') as string
   const body = c.req.valid('json')
+
+  const denied = await assertWorkspaceAdmin(c, body.workspaceId)
+  if (denied) return denied
 
   const prevHash = await getLastEvidenceHash(body.documentId)
   const now = new Date()
@@ -188,68 +230,80 @@ adminRouter.post('/legal-hold', requirePermission('admin'), zValidator('json', L
   })
 })
 
-adminRouter.delete('/legal-hold', requirePermission('admin'), zValidator('json', z.object({
-  documentId: z.string().uuid(),
-  reason: z.string().min(1),
-})), async (c) => {
-  const userId = c.get('userId') as string
-  const body = c.req.valid('json')
+adminRouter.delete(
+  '/legal-hold',
+  zValidator(
+    'json',
+    z.object({
+      documentId: z.string().uuid(),
+      reason: z.string().min(1),
+    })
+  ),
+  async (c) => {
+    const userId = c.get('userId') as string
+    const body = c.req.valid('json')
 
-  // Verify active hold exists
-  const [hold] = await db
-    .select()
-    .from(evidenceRecords)
-    .where(
-      and(
-        eq(evidenceRecords.documentId, body.documentId),
-        eq(evidenceRecords.evidenceType, 'legal_hold')
+    // Verify active hold exists
+    const [hold] = await db
+      .select()
+      .from(evidenceRecords)
+      .where(
+        and(
+          eq(evidenceRecords.documentId, body.documentId),
+          eq(evidenceRecords.evidenceType, 'legal_hold')
+        )
       )
-    )
-    .orderBy(desc(evidenceRecords.createdAt))
-    .limit(1)
+      .orderBy(desc(evidenceRecords.createdAt))
+      .limit(1)
 
-  if (!hold) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'No active legal hold' } },
-      404
-    )
-  }
+    if (!hold) {
+      return c.json(
+        { data: null, error: { code: 'NOT_FOUND', message: 'No active legal hold' } },
+        404
+      )
+    }
 
-  const prevHash = await getLastEvidenceHash(body.documentId)
-  const now = new Date()
+    // The hold lookup is by documentId only — guard the hold's own workspace so a
+    // hold in another tenant can't be lifted.
+    const denied = await assertWorkspaceAdmin(c, hold.workspaceId)
+    if (denied) return denied
 
-  const liftData: typeof evidenceRecords.$inferInsert = {
-    workspaceId: hold.workspaceId,
-    documentId: body.documentId,
-    userId,
-    evidenceType: 'legal_hold_lifted',
-    sourceSnapshot: {
-      reason: body.reason,
-      liftedBy: userId,
-      liftedAt: now.toISOString(),
-      originalHoldId: hold.id,
-    },
-    hashChainPrev: prevHash,
-    recordHash: '',
-    ownershipTier: 'org',
-  }
+    const prevHash = await getLastEvidenceHash(body.documentId)
+    const now = new Date()
 
-  liftData.recordHash = computeRecordHash(
-    {
-      sourceSnapshot: liftData.sourceSnapshot as Record<string, unknown>,
+    const liftData: typeof evidenceRecords.$inferInsert = {
+      workspaceId: hold.workspaceId,
+      documentId: body.documentId,
       userId,
-      timestamp: now.toISOString(),
-    },
-    prevHash
-  )
+      evidenceType: 'legal_hold_lifted',
+      sourceSnapshot: {
+        reason: body.reason,
+        liftedBy: userId,
+        liftedAt: now.toISOString(),
+        originalHoldId: hold.id,
+      },
+      hashChainPrev: prevHash,
+      recordHash: '',
+      ownershipTier: 'org',
+    }
 
-  await db.insert(evidenceRecords).values(liftData)
+    liftData.recordHash = computeRecordHash(
+      {
+        sourceSnapshot: liftData.sourceSnapshot as Record<string, unknown>,
+        userId,
+        timestamp: now.toISOString(),
+      },
+      prevHash
+    )
 
-  return c.json({
-    data: { documentId: body.documentId, status: 'legal_hold_lifted', reason: body.reason },
-    error: null,
-  })
-})
+    await db.insert(evidenceRecords).values(liftData)
+
+    return c.json({
+      data: { documentId: body.documentId, status: 'legal_hold_lifted', reason: body.reason },
+      error: null,
+    })
+  }
+)
 
 // ─── Retention Policy ────────────────────────────────────────────────────────
 
@@ -259,9 +313,12 @@ const RetentionSchema = z.object({
   retentionYears: z.number().positive().optional(),
 })
 
-adminRouter.post('/retention-policy', requirePermission('admin'), zValidator('json', RetentionSchema), async (c) => {
+adminRouter.post('/retention-policy', zValidator('json', RetentionSchema), async (c) => {
   const userId = c.get('userId') as string
   const body = c.req.valid('json')
+
+  const denied = await assertWorkspaceAdmin(c, body.workspaceId)
+  if (denied) return denied
 
   // Store retention policy as an evidence record (org-owned, workspace-scoped)
   const now = new Date()

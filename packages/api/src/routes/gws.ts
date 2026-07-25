@@ -29,6 +29,7 @@ import { users } from '../db/schema/users'
 import { workspaces, workspaceMembers } from '../db/schema/workspaces'
 import { eq, and, desc, lt, gt, inArray, sql } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { insertSignals } from '../services/signals'
 
 /**
@@ -92,6 +93,8 @@ gwsRouter.use('*', authMiddleware)
 
 gwsRouter.get('/documents', async (c) => {
   const workspaceId = c.get('workspaceId') as string
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const filter = c.req.query('filter') // 'tracked' | 'recent' | 'all' (default: 'all')
 
   try {
@@ -166,6 +169,22 @@ gwsRouter.post('/documents', async (c) => {
   if (!externalDocId || !docType || !title || !workspaceId) {
     console.info('[GWS POST /documents] REJECTED — missing fields. workspaceId:', workspaceId)
     return c.json({ error: { message: 'Missing required fields' } }, 400)
+  }
+
+  // SPECIAL CASE: ensureWorkspaceExists below auto-creates the workspace and
+  // makes the caller its admin, so a caller using their OWN (not-yet-seeded)
+  // workspace is legitimate. Only guard when the workspace ALREADY exists —
+  // then the caller must be its owner/member, and a stranger naming someone
+  // else's workspace is rejected. If it doesn't exist yet, fall through to the
+  // auto-create path for this caller.
+  const [existingWs] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+  if (existingWs) {
+    const denied = await assertWorkspaceAccess(c, workspaceId)
+    if (denied) return denied
   }
 
   // Ensure workspace exists (PGlite loses data on restart)
@@ -247,6 +266,9 @@ gwsRouter.get('/documents/:externalDocId', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const results = await db
     .select()
     .from(externalDocuments)
@@ -267,6 +289,9 @@ gwsRouter.get('/documents/:externalDocId', async (c) => {
 gwsRouter.delete('/documents/:externalDocId', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   await db
     .update(externalDocuments)
@@ -292,6 +317,9 @@ gwsRouter.post('/documents/:externalDocId/signals', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
   const userId = c.get('userId') as string
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const body = await c.req.json<{
     signals: Array<{
@@ -368,6 +396,9 @@ gwsRouter.get('/documents/:externalDocId/threads', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   // First get the Follow document
   const docs = await db
     .select()
@@ -435,6 +466,9 @@ gwsRouter.get('/documents/:externalDocId/threads', async (c) => {
 gwsRouter.post('/documents/:externalDocId/content', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const body = await c.req.json<{
     content: string
@@ -517,6 +551,9 @@ gwsRouter.patch('/documents/:externalDocId/strand', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const body = await c.req.json<{ strandId: string }>()
 
   if (!body.strandId) {
@@ -588,6 +625,17 @@ gwsRouter.get('/documents/:externalDocId/threads/:threadId/events', async (c) =>
   const before = c.req.query('before') // ISO timestamp cursor
   const after = c.req.query('after') // ISO timestamp cursor
 
+  const [thread] = await db
+    .select({ workspaceId: threads.workspaceId })
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .limit(1)
+  if (!thread) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Thread not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, thread.workspaceId)
+  if (denied) return denied
+
   let query = db
     .select()
     .from(threadEvents)
@@ -628,6 +676,9 @@ gwsRouter.get('/documents/:externalDocId/threads/:threadId/events', async (c) =>
 gwsRouter.get('/documents/:externalDocId/stats', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   // Get the Follow document
   const docs = await db
@@ -737,6 +788,9 @@ gwsRouter.get('/documents/:externalDocId/addon-actions', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const docs = await db
     .select()
     .from(externalDocuments)
@@ -775,6 +829,9 @@ gwsRouter.get('/documents/:externalDocId/addon-actions', async (c) => {
 gwsRouter.post('/documents/:externalDocId/addon-actions', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const body = await c.req.json<{
     action: {
@@ -839,6 +896,9 @@ gwsRouter.get('/documents/:externalDocId/addon-actions/:actionId', async (c) => 
   const actionId = c.req.param('actionId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const [doc] = await db
     .select()
     .from(externalDocuments)
@@ -889,6 +949,9 @@ gwsRouter.post('/documents/:externalDocId/addon-actions/:actionId/status', async
   const actionId = c.req.param('actionId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const body = await c.req.json<{
     status: 'processing' | 'completed' | 'failed'
     error?: string
@@ -938,6 +1001,9 @@ gwsRouter.delete('/documents/:externalDocId/addon-actions', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const docs = await db
     .select()
     .from(externalDocuments)
@@ -971,6 +1037,8 @@ gwsRouter.delete('/documents/:externalDocId/addon-actions', async (c) => {
 gwsRouter.get('/strands/:strandId/activity', async (c) => {
   const strandId = c.req.param('strandId')
   const workspaceId = c.get('workspaceId') as string
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const limit = Math.min(parseInt(c.req.query('limit') || '50', 10), 200)
   const before = c.req.query('before') // ISO timestamp cursor
 
@@ -1092,6 +1160,9 @@ gwsRouter.get('/documents/:externalDocId/collaborators', async (c) => {
   const externalDocId = c.req.param('externalDocId')
   const workspaceId = c.get('workspaceId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const docs = await db
     .select()
     .from(externalDocuments)
@@ -1136,6 +1207,9 @@ gwsRouter.post('/snapshot', async (c) => {
   const workspaceId = c.get('workspaceId') as string
   const userId = c.get('userId') as string
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const body = await c.req.json<{
     externalDocId: string
     docType?: 'document' | 'spreadsheet' | 'presentation' | 'docs' | 'sheets' | 'slides'
@@ -1169,6 +1243,8 @@ gwsRouter.post('/snapshot', async (c) => {
 // Query params: ?version=14 | ?before=2026-04-08T00:00:00Z | (default: latest)
 gwsRouter.get('/snapshot/:externalDocId', async (c) => {
   const workspaceId = c.get('workspaceId') as string
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const externalDocId = c.req.param('externalDocId')
   const version = c.req.query('version')
   const before = c.req.query('before')

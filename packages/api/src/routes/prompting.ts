@@ -9,6 +9,7 @@ import {
 } from '../services/prompting/pipeline'
 import { getProfile, updatePreferences } from '../services/prompting/user-profiler'
 import { getRecentTriggers } from '../services/prompting/trigger-monitor'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 const promptingRouter = new Hono()
 promptingRouter.use('*', authMiddleware)
@@ -43,6 +44,9 @@ promptingRouter.get('/cards', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const cards = getPendingCards(workspaceId, userId)
   return c.json({ data: cards, error: null })
 })
@@ -59,6 +63,9 @@ promptingRouter.post('/cards/respond', zValidator('json', CardResponseSchema), a
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const result = handleCardResponse(
     workspaceId,
@@ -82,6 +89,9 @@ promptingRouter.post('/cards/dismiss-all', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   dismissAllCards(workspaceId, userId)
   return c.json({ data: { dismissed: true }, error: null })
 })
@@ -97,6 +107,9 @@ promptingRouter.get('/profile', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const profile = getProfile(workspaceId, userId)
   return c.json({ data: profile, error: null })
@@ -115,6 +128,9 @@ promptingRouter.patch('/profile/preferences', zValidator('json', PreferencesSche
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   updatePreferences(workspaceId, userId, body)
   const profile = getProfile(workspaceId, userId)
   return c.json({ data: profile, error: null })
@@ -131,6 +147,9 @@ promptingRouter.get('/triggers', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const triggers = getRecentTriggers(workspaceId, userId)
   return c.json({ data: triggers, error: null })

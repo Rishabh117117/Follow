@@ -73,7 +73,7 @@ export function validateEnv(): void {
 
   if (!e.AUTH_API_SECRET)
     warnings.push(
-      'AUTH_API_SECRET not set — web bearer-token auth disabled; identity falls back to the x-user-id header (AUTH-FIX-1 dual-accept)'
+      'AUTH_API_SECRET not set — bearer-token verification disabled. Phase 3 no longer trusts x-user-id, so web requests will 401 (only DEV_BYPASS_AUTH or the break-glass flag bypass this). Set the SAME secret in the web and API services.'
     )
 
   if (infra.length > 0) {

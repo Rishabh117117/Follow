@@ -6,15 +6,21 @@
  * (weighted edges) so the operator can see exactly what got materialized
  * during indexing — per user, per index.
  *
- * No auth: same posture as /api/users/stats and /api/health, which the dev
- * console at :4000 already calls directly. Do NOT mount this in production.
+ * Operator/dev-console surface — dumps any workspace's semantic graph (fact
+ * content, user names/emails). SECURITY (security-gate-1): now gated behind the
+ * dashboard token, matching the other operator endpoints. The dev console sends
+ * X-Dashboard-Token via authedFetch(); in production without a token configured
+ * it 503s (was previously mounted wide-open despite the "not in production"
+ * note).
  */
 
 import { Hono } from 'hono'
 import { sql } from 'drizzle-orm'
 import { db } from '../db/index'
+import { dashboardTokenMiddleware } from '../middleware/dashboard-token'
 
 export const devGraphRouter = new Hono()
+devGraphRouter.use('*', dashboardTokenMiddleware)
 
 // GET /summary
 // One row per (workspace × user × space) with node + edge counts and last

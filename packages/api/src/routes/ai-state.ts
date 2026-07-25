@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { readFullState } from '../services/ai-state/state-reader'
 import {
   updateStateSession,
@@ -21,11 +22,11 @@ app.get('/', authMiddleware, async (c) => {
   const documentId = c.req.query('documentId')
 
   if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'workspaceId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'workspaceId required' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const state = await readFullState(userId, workspaceId, documentId || null)
   return c.json({ data: state, error: null })
@@ -38,11 +39,11 @@ app.post('/mark-surfaced', authMiddleware, async (c) => {
   const { workspaceId } = body
 
   if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'workspaceId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'workspaceId required' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   await updateStateSession(userId, workspaceId, (current) => ({
     ...current,
@@ -58,19 +59,17 @@ app.get('/week-summary', authMiddleware, async (c) => {
   const workspaceId = c.req.query('workspaceId')
 
   if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'workspaceId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'workspaceId required' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   // Read user's persistent state for patterns
   const state = await readFullState(userId, workspaceId)
 
   // Query cross-document episodes from the index
-  const { executeIndexQuery } = await import(
-    '../services/semantic-index/query-executor'
-  )
+  const { executeIndexQuery } = await import('../services/semantic-index/query-executor')
   const indexResult = await executeIndexQuery({
     workspaceId,
     userId,
@@ -81,10 +80,7 @@ app.get('/week-summary', authMiddleware, async (c) => {
   })
 
   // Build document summary from episodes
-  const docMap = new Map<
-    string,
-    { title: string; episodeCount: number; eventCount: number }
-  >()
+  const docMap = new Map<string, { title: string; episodeCount: number; eventCount: number }>()
   for (const result of indexResult.results) {
     const docId = result.documentId
     if (!docId) continue
@@ -106,10 +102,11 @@ app.get('/week-summary', authMiddleware, async (c) => {
     }
   }
 
+  const stateShape = state as { persistent?: { patterns?: unknown } | null; session?: unknown }
   return c.json({
     data: {
-      patterns: (state as any).persistent?.patterns || null,
-      session: (state as any).session || null,
+      patterns: stateShape.persistent?.patterns || null,
+      session: stateShape.session || null,
       documentsWorkedOn: [...docMap.entries()]
         .map(([id, data]) => ({ documentId: id, ...data }))
         .sort((a, b) => b.episodeCount - a.episodeCount),
@@ -127,17 +124,14 @@ app.delete('/knowledge/:factIndex', authMiddleware, async (c) => {
   const factIndex = parseInt(c.req.param('factIndex'), 10)
 
   if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'workspaceId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'workspaceId required' } }, 400)
   }
   if (Number.isNaN(factIndex) || factIndex < 0) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'invalid factIndex' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'invalid factIndex' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   await updateStatePersistent(userId, workspaceId, (current) => {
     const raw = current as unknown as Record<string, unknown>
@@ -170,6 +164,9 @@ app.patch('/knowledge', authMiddleware, async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
+
   // Capture the original fact text so we can propagate to the shared pool.
   let originalFactText: string | undefined
 
@@ -182,11 +179,14 @@ app.patch('/knowledge', authMiddleware, async (c) => {
       ? ([...raw['knowledgeExclusions']] as Array<Record<string, unknown>>)
       : []
 
-    const idx = knowledge.findIndex((f) => f && (f['id'] === body.factId || f['fact'] === body.factId))
+    const idx = knowledge.findIndex(
+      (f) => f && (f['id'] === body.factId || f['fact'] === body.factId)
+    )
 
     if (idx >= 0) {
       const existing = knowledge[idx]!
-      originalFactText = typeof existing['fact'] === 'string' ? (existing['fact'] as string) : undefined
+      originalFactText =
+        typeof existing['fact'] === 'string' ? (existing['fact'] as string) : undefined
       if (body.action === 'remove') {
         exclusions.push({ ...existing, removedAt: new Date().toISOString() })
         knowledge.splice(idx, 1)
@@ -213,9 +213,7 @@ app.patch('/knowledge', authMiddleware, async (c) => {
       await updateSharedState(body.documentId, body.workspaceId, (current) => {
         const updated = { ...current }
         const list = (updated.knowledge || []) as Array<Record<string, unknown>>
-        const matchIdx = list.findIndex(
-          (k) => k.id === body.factId || k.fact === originalFactText
-        )
+        const matchIdx = list.findIndex((k) => k.id === body.factId || k.fact === originalFactText)
         if (matchIdx < 0) return updated
         sharedPropagated = true
         if (body.action === 'remove') {
@@ -250,11 +248,11 @@ app.delete('/', authMiddleware, async (c) => {
   const workspaceId = c.req.query('workspaceId')
 
   if (!workspaceId) {
-    return c.json(
-      { data: null, error: { code: 'INVALID', message: 'workspaceId required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'INVALID', message: 'workspaceId required' } }, 400)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   await db
     .update(aiState)

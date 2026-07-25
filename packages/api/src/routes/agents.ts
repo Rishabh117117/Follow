@@ -14,6 +14,7 @@ import { randomBytes, createHmac } from 'crypto'
 import { db } from '../db/index'
 import { apiKeys } from '../db/schema/collaboration'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 export const agentsRouter = new Hono()
 agentsRouter.use('*', authMiddleware)
@@ -38,6 +39,11 @@ agentsRouter.post('/provision', async (c) => {
       400
     )
   }
+
+  // Minting a wsp_ key bound to a workspace grants that key holder access to it,
+  // so the caller must belong to the workspace they're provisioning into.
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   // Revoke any prior desktop-agent key for this user+workspace.
   const prior = await db
@@ -78,7 +84,8 @@ agentsRouter.post('/provision', async (c) => {
     )
   }
 
-  const apiUrl = process.env['MCP_PUBLIC_URL'] || `http://localhost:${process.env['PORT'] ?? '3001'}`
+  const apiUrl =
+    process.env['MCP_PUBLIC_URL'] || `http://localhost:${process.env['PORT'] ?? '3001'}`
 
   return c.json({
     data: {
@@ -124,7 +131,12 @@ agentsRouter.get('/status', async (c) => {
 
   return c.json({
     data: row
-      ? { connected: true, keyPrefix: row.keyPrefix, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt }
+      ? {
+          connected: true,
+          keyPrefix: row.keyPrefix,
+          createdAt: row.createdAt,
+          lastUsedAt: row.lastUsedAt,
+        }
       : { connected: false },
     error: null,
   })

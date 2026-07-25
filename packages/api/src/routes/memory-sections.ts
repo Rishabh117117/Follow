@@ -25,7 +25,9 @@ import { z } from 'zod'
 import { and, asc, eq } from 'drizzle-orm'
 import { db } from '../db/index'
 import { memorySections } from '../db/schema/memory-sections'
+import { spaces } from '../db/schema/spaces'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { buildIndexDigest, type IndexDigest } from '../services/memory/index-digest'
 
 /**
@@ -47,6 +49,38 @@ async function buildIndexDigestSafe(userId: string, indexId: string): Promise<In
       generatedAt: new Date().toISOString(),
     }
   }
+}
+
+/**
+ * security-gate-1: buildIndexDigest's project branch (buildProjectDigest) reads
+ * a space/workspace by indexId with NO user/membership scoping, so a caller
+ * could digest another tenant's index by naming its id. Resolve the indexId to
+ * the workspace that owns it so the caller can be membership-checked before the
+ * digest runs.
+ *   - 'personal' → null: buildPersonalDigest is strictly userId-scoped, so no
+ *     workspace guard applies (and 'personal' is not a workspace).
+ *   - a project index === a `spaces` row → guard the space's owning workspace.
+ *   - an unknown/non-space id → itself, so assertWorkspaceAccess rejects it.
+ */
+async function workspaceIdForIndex(indexId: string): Promise<string | null> {
+  if (indexId === 'personal') return null
+  // A non-UUID key is a personal-style index label: it can name neither a
+  // space nor a workspace, and the project digest's uuid-column queries all
+  // fail closed (buildIndexDigestSafe degrades to an empty digest) — nothing
+  // to guard.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(indexId)) {
+    return null
+  }
+  const [space] = await db
+    .select({ workspaceId: spaces.workspaceId })
+    .from(spaces)
+    .where(eq(spaces.id, indexId))
+    .limit(1)
+  if (space) return space.workspaceId
+  // A UUID that isn't a space can still reach data: buildProjectDigest matches
+  // `workspaceId = indexId` columns directly. Guard it AS a workspace id
+  // (assertWorkspaceAccess 404s when no such workspace exists).
+  return indexId
 }
 import {
   ensureBuiltInProfiles,
@@ -221,6 +255,13 @@ memorySectionsRouter.post(
         )
       }
 
+      // Guard the workspace behind a project index before the digest reads it.
+      const wsId = await workspaceIdForIndex(profile.indexId)
+      if (wsId) {
+        const denied = await assertWorkspaceAccess(c, wsId)
+        if (denied) return denied
+      }
+
       const digest = await buildIndexDigestSafe(userId, profile.indexId)
       const result = await generateVersion(profile.id, digest)
 
@@ -304,6 +345,14 @@ memorySectionsRouter.get('/sections', async (c) => {
   const parsed = IndexQuerySchema.safeParse({ indexId })
   if (!parsed.success) {
     return c.json({ data: null, error: { message: 'indexId is required' } }, 400)
+  }
+
+  // A project index digests a workspace's data (buildProjectDigest); block a
+  // caller who isn't a member. 'personal' is userId-scoped and skips the guard.
+  const wsId = await workspaceIdForIndex(parsed.data.indexId)
+  if (wsId) {
+    const denied = await assertWorkspaceAccess(c, wsId)
+    if (denied) return denied
   }
 
   try {

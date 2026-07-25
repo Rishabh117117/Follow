@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { eq, and, desc, isNull, lt, sql } from 'drizzle-orm'
@@ -12,6 +13,7 @@ import {
   users,
 } from '../db/schema/index'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { streamSSE } from 'hono/streaming'
 import type { ToolCallRecord } from '@workspace/shared/types'
 
@@ -117,12 +119,39 @@ const FeedbackSchema = z.object({
   feedback: z.enum(['positive', 'negative']),
 })
 
+// ─── Cross-tenant guard ────────────────────────────────────────────
+// Loads a conversation's workspaceId and asserts the caller is a member
+// of that workspace. Returns a ready-to-return error Response (404 when the
+// conversation is gone, 401/403 on deny) or null when access is granted.
+// The finer within-workspace ACL (chat_conversation_members) is a separate
+// concern; this closes the cross-tenant boundary.
+async function guardConversationAccess(
+  c: Context,
+  conversationId: string
+): Promise<Response | null> {
+  const [conv] = await db
+    .select({ workspaceId: chatConversations.workspaceId })
+    .from(chatConversations)
+    .where(eq(chatConversations.id, conversationId))
+    .limit(1)
+  if (!conv) {
+    return c.json(
+      { data: null, error: { code: 'NOT_FOUND', message: 'Conversation not found' } },
+      404
+    )
+  }
+  return assertWorkspaceAccess(c, conv.workspaceId)
+}
+
 // ─── Conversations ─────────────────────────────────────────────────
 
 // Create conversation
 chatRouter.post('/conversations', zValidator('json', CreateConversationSchema), async (c) => {
   const userId = c.get('userId')
   const body = c.req.valid('json')
+
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
 
   const [conversation] = await db
     .insert(chatConversations)
@@ -204,6 +233,9 @@ chatRouter.patch('/conversations/:id', zValidator('json', UpdateConversationSche
       404
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
 
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (body.title !== undefined) updates.title = body.title
@@ -307,6 +339,9 @@ chatRouter.get('/conversations/:id', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, conversation.workspaceId)
+  if (denied) return denied
+
   const messages = await db
     .select()
     .from(chatMessages)
@@ -343,6 +378,9 @@ chatRouter.get('/conversations/:id/history/:version', async (c) => {
       400
     )
   }
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
+
   const [snap] = await db
     .select()
     .from(chatConversationSnapshots)
@@ -363,6 +401,9 @@ chatRouter.get('/conversations/:id/history/:version', async (c) => {
 chatRouter.delete('/conversations/:id', async (c) => {
   const conversationId = c.req.param('id')
 
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
+
   await db.delete(chatConversations).where(eq(chatConversations.id, conversationId))
 
   return c.json({ data: { success: true }, error: null })
@@ -372,6 +413,9 @@ chatRouter.delete('/conversations/:id', async (c) => {
 
 chatRouter.get('/conversations/:id/members', async (c) => {
   const conversationId = c.req.param('id')
+
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
 
   const members = await db
     .select({
@@ -408,6 +452,9 @@ chatRouter.post(
       )
     }
 
+    const denied = await assertWorkspaceAccess(c, conversation.workspaceId)
+    if (denied) return denied
+
     await db
       .insert(chatConversationMembers)
       .values({ conversationId, userId: body.userId, role: 'member' })
@@ -420,6 +467,9 @@ chatRouter.post(
 chatRouter.delete('/conversations/:id/members/:userId', async (c) => {
   const conversationId = c.req.param('id')
   const memberUserId = c.req.param('userId')
+
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
 
   await db
     .delete(chatConversationMembers)
@@ -442,6 +492,9 @@ chatRouter.get('/conversations/:id/messages', async (c) => {
   const conversationId = c.req.param('id')
   const limit = parseInt(c.req.query('limit') ?? '50', 10)
   const cursor = c.req.query('cursor')
+
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
 
   const conditions = [
     eq(chatMessages.conversationId, conversationId),
@@ -482,6 +535,9 @@ chatRouter.post('/conversations/:id/messages', zValidator('json', SendMessageSch
       404
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, conversation.workspaceId)
+  if (denied) return denied
 
   // 2. Save user message
   await db.insert(chatMessages).values({
@@ -889,6 +945,9 @@ chatRouter.post(
     const parentMessageId = c.req.param('messageId')
     const body = c.req.valid('json')
 
+    const denied = await guardConversationAccess(c, conversationId)
+    if (denied) return denied
+
     const [message] = await db
       .insert(chatMessages)
       .values({
@@ -910,8 +969,12 @@ chatRouter.post(
   '/conversations/:id/messages/:messageId/feedback',
   zValidator('json', FeedbackSchema),
   async (c) => {
+    const conversationId = c.req.param('id')
     const messageId = c.req.param('messageId')
     const body = c.req.valid('json')
+
+    const denied = await guardConversationAccess(c, conversationId)
+    if (denied) return denied
 
     await db
       .update(chatMessages)
@@ -935,6 +998,9 @@ chatRouter.post(
     const messageId = c.req.param('messageId')
     const body = c.req.valid('json')
 
+    const denied = await guardConversationAccess(c, conversationId)
+    if (denied) return denied
+
     const [bookmark] = await db
       .insert(deepDiveBookmarks)
       .values({
@@ -950,7 +1016,11 @@ chatRouter.post(
 )
 
 chatRouter.delete('/conversations/:id/bookmarks/:bookmarkId', async (c) => {
+  const conversationId = c.req.param('id')
   const bookmarkId = c.req.param('bookmarkId')
+
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
 
   await db.delete(deepDiveBookmarks).where(eq(deepDiveBookmarks.id, bookmarkId))
 
@@ -959,6 +1029,9 @@ chatRouter.delete('/conversations/:id/bookmarks/:bookmarkId', async (c) => {
 
 chatRouter.get('/conversations/:id/bookmarks', async (c) => {
   const conversationId = c.req.param('id')
+
+  const denied = await guardConversationAccess(c, conversationId)
+  if (denied) return denied
 
   const bookmarks = await db
     .select()

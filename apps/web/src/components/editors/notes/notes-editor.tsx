@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useCollaboration, useAutoSave } from '@/lib/collaboration'
-import { useTrackEvent } from '@/hooks/use-track-event'
 import { EditorHeader } from '../shared/editor-header'
 import type { SaveStatus } from '../shared/save-indicator'
 import { createRichTextExtensions, createStandaloneExtensions } from './extensions'
@@ -26,7 +25,6 @@ export function NotesEditor({
 }: NotesEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const { doc, provider, connected, collaborators } = useCollaboration(fileId, workspaceId)
-  const track = useTrackEvent()
 
   const editor = useEditor(
     {
@@ -50,14 +48,6 @@ export function NotesEditor({
       },
       onUpdate: () => {
         setSaveStatus('unsaved')
-      },
-      onCreate: () => {
-        track({
-          actionType: 'edit',
-          objectType: 'note',
-          objectId: fileId,
-          payload: { event: 'note_opened' },
-        })
       },
     },
     [doc, provider]

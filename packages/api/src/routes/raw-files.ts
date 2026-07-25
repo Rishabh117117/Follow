@@ -12,6 +12,7 @@ import { createFlexAuthMiddleware } from '../middleware/api-key-auth'
 import { authMiddleware } from '../middleware/auth'
 import { storeRawFile, getRawFile, listRawFiles } from '../services/raw-file-store'
 import { queueFileIndex } from '../services/indexing/file-indexer'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 export const rawFilesRouter = new Hono()
 rawFilesRouter.use('*', createFlexAuthMiddleware(authMiddleware))
@@ -21,14 +22,16 @@ rawFilesRouter.post('/upload', async (c) => {
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const formData = await c.req.formData()
   const file = formData.get('file') as File | null
   const sourceType = (formData.get('sourceType') as string) ?? 'upload'
   const sourceRef = formData.get('sourceRef') as string | null
   // STABILIZE-3: spaceId can arrive either as a form field or as a header
   // (the Desktop Agent uses the header path via fetch()).
-  const spaceId =
-    (formData.get('spaceId') as string | null) ?? c.req.header('x-space-id') ?? null
+  const spaceId = (formData.get('spaceId') as string | null) ?? c.req.header('x-space-id') ?? null
 
   if (!file) {
     return c.json(
@@ -90,6 +93,9 @@ rawFilesRouter.post('/upload', async (c) => {
 rawFilesRouter.post('/index-local', async (c) => {
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const body = (await c.req.json()) as {
     filePath: string
@@ -174,7 +180,9 @@ rawFilesRouter.get('/check-hash', async (c) => {
   const [existing] = await db
     .select({ id: rawFiles.id, spaceId: rawFiles.spaceId })
     .from(rawFiles)
-    .where(and(eq(rawFiles.contentHash, hash), eq(rawFiles.userId, userId), isNull(rawFiles.deletedAt)))
+    .where(
+      and(eq(rawFiles.contentHash, hash), eq(rawFiles.userId, userId), isNull(rawFiles.deletedAt))
+    )
     .limit(1)
 
   if (existing && spaceId && existing.spaceId !== spaceId) {
@@ -194,6 +202,10 @@ rawFilesRouter.get('/check-hash', async (c) => {
 rawFilesRouter.post('/upload-batch', async (c) => {
   const userId = c.get('userId') as string
   const workspaceId = (c.get('workspaceId') as string) ?? ''
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const body = (await c.req.json()) as Array<{
     fileName: string
     filePath?: string
@@ -244,7 +256,9 @@ rawFilesRouter.post('/upload-batch', async (c) => {
             fileSize: record.fileSize,
             filePath: record.filePath,
           })
-        } catch { /* non-fatal */ }
+        } catch {
+          /* non-fatal */
+        }
       }
 
       results.push({ fileName: item.fileName, status: 'ok', id: record.id })
@@ -272,10 +286,7 @@ rawFilesRouter.get('/', async (c) => {
   // ?spaceId=personal → null filter (personal index only)
   // ?spaceId=<uuid>   → that project only
   // (omitted)         → no filter (legacy / cross-project)
-  const spaceId =
-    spaceIdParam === 'personal'
-      ? null
-      : spaceIdParam || undefined
+  const spaceId = spaceIdParam === 'personal' ? null : spaceIdParam || undefined
 
   const files = await listRawFiles(userId, workspaceId, {
     limit,
@@ -290,9 +301,7 @@ rawFilesRouter.get('/', async (c) => {
   // as standalone rows in the Items list — the conversation itself is the
   // user-facing object. Only surface them when the caller explicitly asks.
   const filtered =
-    sourceType === 'chat_artifact'
-      ? files
-      : files.filter((f) => f.sourceType !== 'chat_artifact')
+    sourceType === 'chat_artifact' ? files : files.filter((f) => f.sourceType !== 'chat_artifact')
 
   return c.json({ data: filtered, error: null })
 })
@@ -309,10 +318,7 @@ rawFilesRouter.get('/:id', async (c) => {
     .limit(1)
 
   if (!record) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'File not found' } },
-      404
-    )
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
   return c.json({ data: record, error: null })
@@ -325,10 +331,7 @@ rawFilesRouter.get('/:id/content', async (c) => {
 
   const result = await getRawFile(fileId)
   if (!result || result.record.userId !== userId) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'File not found' } },
-      404
-    )
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
   c.header('Content-Type', result.record.mimeType)
@@ -348,16 +351,10 @@ rawFilesRouter.delete('/:id', async (c) => {
     .limit(1)
 
   if (!record) {
-    return c.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'File not found' } },
-      404
-    )
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
-  await db
-    .update(rawFiles)
-    .set({ deletedAt: new Date() })
-    .where(eq(rawFiles.id, fileId))
+  await db.update(rawFiles).set({ deletedAt: new Date() }).where(eq(rawFiles.id, fileId))
 
   return c.json({ data: { ok: true }, error: null })
 })

@@ -11,6 +11,7 @@ import { gte } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth'
 import { getUploadUrl, getDownloadUrl, getStorageKey } from '../lib/s3'
 import { EventBus } from '../events/EventBus'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 const CreateFileSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -60,6 +61,9 @@ filesRouter.post('/', zValidator('json', CreateFileSchema), async (c) => {
   const body = c.req.valid('json')
   const userId = c.get('userId')
 
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
+
   // If templateId is provided, copy template metadata into the new file
   let templateMetadata: Record<string, unknown> | null = null
   if (body.templateId) {
@@ -70,6 +74,7 @@ filesRouter.post('/', zValidator('json', CreateFileSchema), async (c) => {
     if (template) {
       const tmplMeta = (template.metadata ?? {}) as Record<string, unknown>
       // Strip the isTemplate flag so the new file is a real document, not another template
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-destructuring strips the flags
       const { isTemplate: _isTemplate, templateType: _templateType, ...rest } = tmplMeta
       templateMetadata = rest
     }
@@ -142,6 +147,9 @@ filesRouter.get('/', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const conditions = [eq(files.workspaceId, workspaceId)]
 
   // spaceId filter takes precedence over folder restriction so projects can show all docs
@@ -164,7 +172,9 @@ filesRouter.get('/', async (c) => {
   if (isTemplate === 'true') {
     conditions.push(sql`(${files.metadata}->>'isTemplate')::boolean = true`)
   } else {
-    conditions.push(sql`(${files.metadata}->>'isTemplate' IS NULL OR (${files.metadata}->>'isTemplate')::boolean = false)`)
+    conditions.push(
+      sql`(${files.metadata}->>'isTemplate' IS NULL OR (${files.metadata}->>'isTemplate')::boolean = false)`
+    )
   }
 
   if (!includeTrash) {
@@ -209,6 +219,9 @@ filesRouter.get('/templates', async (c) => {
     )
   }
 
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
+
   const result = await db
     .select({
       id: files.id,
@@ -241,6 +254,9 @@ filesRouter.get('/search', async (c) => {
       400
     )
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const result = await db
     .select({
@@ -294,6 +310,9 @@ filesRouter.get('/:id', async (c) => {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
+
   let downloadUrl: string | undefined
   if (file.storagePath) {
     try {
@@ -310,6 +329,17 @@ filesRouter.patch('/:id', zValidator('json', UpdateFileSchema), async (c) => {
   const id = c.req.param('id')
   const body = c.req.valid('json')
   const userId = c.get('userId')
+
+  const [existing] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, id))
+    .limit(1)
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
 
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (body.name !== undefined) updates.name = body.name
@@ -353,6 +383,9 @@ filesRouter.delete('/:id', async (c) => {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
+
   const now = new Date()
 
   await db.update(files).set({ deletedAt: now }).where(eq(files.id, id))
@@ -390,6 +423,17 @@ async function softDeleteChildren(parentId: string, deletedAt: Date): Promise<vo
 
 filesRouter.post('/:id/restore', async (c) => {
   const id = c.req.param('id')
+
+  const [existing] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, id))
+    .limit(1)
+  if (!existing) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, existing.workspaceId)
+  if (denied) return denied
 
   const [restored] = await db
     .update(files)
@@ -432,6 +476,9 @@ filesRouter.post('/:id/duplicate', async (c) => {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
 
+  const denied = await assertWorkspaceAccess(c, original.workspaceId)
+  if (denied) return denied
+
   const [copy] = await db
     .insert(files)
     .values({
@@ -452,6 +499,16 @@ filesRouter.post('/:id/duplicate', async (c) => {
 
 filesRouter.patch('/bulk', zValidator('json', BulkActionSchema), async (c) => {
   const { fileIds, action, parentFolderId } = c.req.valid('json')
+
+  // Guard: every target file's workspace must be accessible to the caller.
+  const targetRows = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(inArray(files.id, fileIds))
+  for (const wsId of [...new Set(targetRows.map((r) => r.workspaceId))]) {
+    const denied = await assertWorkspaceAccess(c, wsId)
+    if (denied) return denied
+  }
 
   if (action === 'delete') {
     const now = new Date()
@@ -483,6 +540,17 @@ filesRouter.patch('/bulk', zValidator('json', BulkActionSchema), async (c) => {
 filesRouter.get('/:id/versions', async (c) => {
   const fileId = c.req.param('id')
 
+  const [file] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, fileId))
+    .limit(1)
+  if (!file) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
+
   const versions = await db
     .select({
       id: fileVersions.id,
@@ -510,6 +578,17 @@ filesRouter.get('/:id/versions/:versionId', async (c) => {
   if (!version) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Version not found' } }, 404)
   }
+
+  const [file] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, version.fileId))
+    .limit(1)
+  if (!file) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
 
   let downloadUrl: string | undefined
   try {
@@ -562,11 +641,19 @@ filesRouter.get('/:id/changes-since', async (c) => {
   const fileId = c.req.param('id')
   const sinceParam = c.req.query('since')
   if (!sinceParam) {
-    return c.json(
-      { data: null, error: { code: 'BAD_REQUEST', message: 'since required' } },
-      400
-    )
+    return c.json({ data: null, error: { code: 'BAD_REQUEST', message: 'since required' } }, 400)
   }
+  const [file] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, fileId))
+    .limit(1)
+  if (!file) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
+
   const since = new Date(sinceParam)
 
   // Find threads attached to this file (metadata.fileId match)
@@ -600,7 +687,9 @@ filesRouter.get('/:id/changes-since', async (c) => {
     byOwner[ownerId].editCount++
     if (ev.type === 'ai_interaction') aiEdits++
     if ((ev.metadata as Record<string, unknown> | null)?.['tension']) tensions++
-    const section = (ev.metadata as Record<string, unknown> | null)?.['section'] as string | undefined
+    const section = (ev.metadata as Record<string, unknown> | null)?.['section'] as
+      | string
+      | undefined
     if (section) byOwner[ownerId].sections.add(section)
   }
 
@@ -608,7 +697,10 @@ filesRouter.get('/:id/changes-since', async (c) => {
   const ownerIds = Object.keys(byOwner).filter((id) => id !== 'unknown')
   const userRows =
     ownerIds.length > 0
-      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ownerIds))
+      ? await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(inArray(users.id, ownerIds))
       : []
   const nameById = Object.fromEntries(userRows.map((u) => [u.id, u.name ?? 'Unknown']))
 
@@ -645,6 +737,9 @@ filesRouter.post('/:id/versions/:versionId/restore', async (c) => {
   if (!file) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
   }
+
+  const denied = await assertWorkspaceAccess(c, file.workspaceId)
+  if (denied) return denied
 
   const newVersion = file.version + 1
 

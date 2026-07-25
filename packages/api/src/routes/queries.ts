@@ -29,11 +29,8 @@ import {
   type Aggregation,
   type SelectSpec,
 } from '../services/query'
-import {
-  getActiveScope,
-  resolveEffectiveBoundaries,
-  type Boundary,
-} from '../services/scope'
+import { getActiveScope, resolveEffectiveBoundaries, type Boundary } from '../services/scope'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 
 export const queriesRouter = new Hono()
 queriesRouter.use('*', authMiddleware)
@@ -86,9 +83,7 @@ const selectSpecSchema = z.object({
   ),
   limit: z.number().int().min(1).max(1000).optional(),
   offset: z.number().int().min(0).optional(),
-  orderBy: z
-    .object({ field: z.string(), direction: z.enum(['asc', 'desc']) })
-    .optional(),
+  orderBy: z.object({ field: z.string(), direction: z.enum(['asc', 'desc']) }).optional(),
   groupBy: z.string().optional(),
 })
 
@@ -165,6 +160,8 @@ queriesRouter.post('/run', zValidator('json', runBodySchema), async (c) => {
   const userId = c.get('userId')
   const workspaceId = c.get('workspaceId') ?? 'default'
   const sessionToken = sessionTokenFor(userId, workspaceId)
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
   const body = c.req.valid('json')
   const result = await runWithGovernance(userId, workspaceId, sessionToken, body.structured)
   return c.json({ data: { result }, error: null })
@@ -231,9 +228,7 @@ queriesRouter.get('/', async (c) => {
   const rows = await db
     .select()
     .from(savedQueries)
-    .where(
-      and(eq(savedQueries.userId, userId), eq(savedQueries.workspaceId, workspaceId))
-    )
+    .where(and(eq(savedQueries.userId, userId), eq(savedQueries.workspaceId, workspaceId)))
     .orderBy(desc(savedQueries.isPinned), desc(savedQueries.updatedAt))
   return c.json({ data: { queries: rows }, error: null })
 })
@@ -272,6 +267,9 @@ queriesRouter.post('/:id/run', async (c) => {
   if (!row) {
     return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Query not found' } }, 404)
   }
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   const result = await runWithGovernance(userId, workspaceId, sessionToken, {
     boundaries: (row.boundaries as Boundary[]) ?? [],
@@ -320,8 +318,6 @@ queriesRouter.patch('/:id', zValidator('json', patchBodySchema), async (c) => {
 queriesRouter.delete('/:id', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
-  await db
-    .delete(savedQueries)
-    .where(and(eq(savedQueries.id, id), eq(savedQueries.userId, userId)))
+  await db.delete(savedQueries).where(and(eq(savedQueries.id, id), eq(savedQueries.userId, userId)))
   return c.json({ data: { deleted: true }, error: null })
 })

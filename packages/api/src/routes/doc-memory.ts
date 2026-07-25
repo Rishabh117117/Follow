@@ -11,13 +11,15 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { authMiddleware } from '../middleware/auth'
+import { assertWorkspaceAccess } from '../services/workspace-access'
 import { db } from '../db/index'
 import {
   documentInterpretations,
   documentPatterns,
   documentDecisionTrails,
+  files,
 } from '../db/schema/index'
-import { eq, desc } from 'drizzle-orm'
+import { and, eq, desc } from 'drizzle-orm'
 import { executeIndexQuery } from '../services/semantic-index/query-executor'
 import type {
   DocumentMemory,
@@ -36,6 +38,9 @@ docMemoryRouter.get('/:fileId', async (c) => {
   const fileId = c.req.param('fileId')
   const userId = c.get('userId') as string
   const workspaceId = (c.req.query('workspaceId') as string) ?? ''
+
+  const denied = await assertWorkspaceAccess(c, workspaceId)
+  if (denied) return denied
 
   // Try semantic index interpretation first
   let interpretation: DocumentInterpretation | null = null
@@ -85,7 +90,12 @@ docMemoryRouter.get('/:fileId', async (c) => {
     const [interpRow] = await db
       .select()
       .from(documentInterpretations)
-      .where(eq(documentInterpretations.fileId, fileId))
+      .where(
+        and(
+          eq(documentInterpretations.fileId, fileId),
+          eq(documentInterpretations.workspaceId, workspaceId)
+        )
+      )
       .orderBy(desc(documentInterpretations.updatedAt))
       .limit(1)
 
@@ -117,7 +127,7 @@ docMemoryRouter.get('/:fileId', async (c) => {
   const patternRows = await db
     .select()
     .from(documentPatterns)
-    .where(eq(documentPatterns.fileId, fileId))
+    .where(and(eq(documentPatterns.fileId, fileId), eq(documentPatterns.workspaceId, workspaceId)))
     .orderBy(desc(documentPatterns.confidence))
     .limit(10)
 
@@ -125,7 +135,12 @@ docMemoryRouter.get('/:fileId', async (c) => {
   const trailRows = await db
     .select()
     .from(documentDecisionTrails)
-    .where(eq(documentDecisionTrails.fileId, fileId))
+    .where(
+      and(
+        eq(documentDecisionTrails.fileId, fileId),
+        eq(documentDecisionTrails.workspaceId, workspaceId)
+      )
+    )
 
   const patterns: DocumentPattern[] = patternRows
     .filter((p) => !(p.dismissed as boolean))
@@ -165,6 +180,9 @@ docMemoryRouter.post('/:fileId/interpret', zValidator('json', InterpretSchema), 
   const userId = c.get('userId') as string
   const body = c.req.valid('json')
 
+  const denied = await assertWorkspaceAccess(c, body.workspaceId)
+  if (denied) return denied
+
   // Use semantic index to generate interpretation
   const indexResult = await executeIndexQuery({
     workspaceId: body.workspaceId,
@@ -184,6 +202,17 @@ docMemoryRouter.post('/:fileId/interpret', zValidator('json', InterpretSchema), 
 docMemoryRouter.get('/:fileId/trail/:paragraphRef', async (c) => {
   const fileId = c.req.param('fileId')
   const paragraphRef = c.req.param('paragraphRef')
+
+  const [fileRow] = await db
+    .select({ workspaceId: files.workspaceId })
+    .from(files)
+    .where(eq(files.id, fileId))
+    .limit(1)
+  if (!fileRow) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
+  }
+  const denied = await assertWorkspaceAccess(c, fileRow.workspaceId)
+  if (denied) return denied
 
   const trailRows = await db
     .select()
@@ -218,6 +247,17 @@ docMemoryRouter.patch(
   async (c) => {
     const patternId = c.req.param('patternId')
     const body = c.req.valid('json')
+
+    const [patternRow] = await db
+      .select({ workspaceId: documentPatterns.workspaceId })
+      .from(documentPatterns)
+      .where(eq(documentPatterns.id, patternId))
+      .limit(1)
+    if (!patternRow) {
+      return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Pattern not found' } }, 404)
+    }
+    const denied = await assertWorkspaceAccess(c, patternRow.workspaceId)
+    if (denied) return denied
 
     const updates: Record<string, unknown> = {}
     if (body.dismissed !== undefined) updates['dismissed'] = body.dismissed
