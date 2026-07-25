@@ -92,7 +92,9 @@ Each role has its own model tier (`config/models.ts` — Gemma for volume, DeepS
 
 ## 8. Auth, honestly
 
-The platform runs **single-user by design** right now. Two identity paths exist in the code today: the `x-user-id` header (legacy, trusted — the web app's real path) and `wsp_` machine keys for MCP. A third — minted JWT bearer for the human path — was built and deployed, then reverted after a cross-service secret mismatch broke login; it lives in git history pending a secret alignment and retry. Impersonation hardening (retiring the trusted header) and a workspace-membership guard are **staged, deliberate open items** — the standing rule is: no second real user and no public signup until both land. `DEV_BYPASS_AUTH` gates the dev-user seed path and defaults off in production.
+As of **security-gate-1** the platform is **multi-tenant-safe**. Identity comes only from verified credentials: a minted **JWT bearer** for the human path (the web app signs it server-side with `AUTH_API_SECRET`; the API verifies the signature) and `wsp_` machine keys for MCP (`middleware/api-key-auth.ts`). The `x-user-id` header is **no longer trusted** — a forged or absent header, or an invalid/expired bearer, is a hard 401 (`middleware/auth.ts`). The one escape hatch is `AUTH_ACCEPT_LEGACY_USER_HEADER=true`, a break-glass env flag that re-enables the legacy header path for emergency rollback (startup warns if it's on in production); `DEV_BYPASS_AUTH` still gates the local dev-user seed path and defaults off in production.
+
+Cross-tenant access is closed by a **workspace-membership guard** (`services/workspace-access.ts`): access to any workspace requires the caller to be its owner or an active `workspace_members` row. It's enforced at every endpoint that takes a caller-supplied `workspaceId` (header, body, or query) and once at the MCP transport boundary for every session-scoped tool. So naming another workspace's id — or minting a `wsp_` key into it — returns 403, verified live. Finer _within_-workspace ACLs (per-conversation membership, per-user privacy rules) are the next layer of hardening, tracked separately.
 
 ## 9. Testing and quality culture
 
