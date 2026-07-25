@@ -49,7 +49,7 @@ The fastest way to understand the system is to follow each input to its destinat
 ### 4a. A browser signal
 
 1. The Chrome extension (`apps/extension`) batches activity signals every ~5 s and sends them over WebSocket to the signal server (`packages/api/src/ws/index.ts`, port 3002).
-2. Signals land in ClickHouse (`thread_signals` table) — high-volume, 90-day TTL, cheap to write. When ClickHouse is absent (as in prod today), an in-memory stand-in absorbs them (`db/clickhouse.ts`); `/api/health` reports `degraded`, which is the by-design steady state, not an outage.
+2. Signals land in ClickHouse (`thread_signals` table) — high-volume, 7-day TTL (the processed/summary tables keep 90 days to 2 years), cheap to write. When ClickHouse is absent (as in prod today), an in-memory stand-in absorbs them (`db/clickhouse.ts`); `/api/health` reports `degraded`, which is the by-design steady state, not an outage.
 3. Internal services also emit signals without HTTP — `services/signals.ts` (`insertSignals`) is the shared writer used by GWS ingestion and chat completion.
 4. Session infrastructure (`services/sessions/`) brackets activity into sessions (idle reaper, queue bridge, pipeline crons) — these are what trigger the Archivist and Profiler roles at session start/end.
 
@@ -63,7 +63,7 @@ The fastest way to understand the system is to follow each input to its destinat
 
 ### 4c. A chat message
 
-1. `POST /api/chat/:conversationId/messages` (route `chat.ts`) loads history, then streams the response over SSE.
+1. `POST /api/chat/conversations/:id/messages` (route `chat.ts`) loads history, then streams the response over SSE.
 2. Before the model is called, the **reference agent** (`services/reference-agent/`) runs active recall in four stages: `classifier.ts` (does this query need memory? which kind?), `planner.ts`, `retriever.ts` (multiple lanes: `index_records` vector search, memory layers, point-in-time states), `assembler.ts` (renders context blocks, attributes each fact to its author, marks cross-author `contradicts` pairs as `⚠ CONTESTED`).
 3. `services/chat/completion.ts` sends system prompt + context + tools to OpenRouter (`CHAT_AGENT` tier; vision variant when images attach) and streams tokens back, executing tool calls (`services/chat/tools.ts`) along the way.
 4. After the turn, the conversation becomes pipeline input itself via the chat fact extractor — chat is both a consumer and a producer of memory.
@@ -92,14 +92,14 @@ Each role has its own model tier (`config/models.ts` — Gemma for volume, DeepS
 
 ## 8. Auth, honestly
 
-The platform runs **single-user by design** right now. Three identity paths exist: `x-user-id` header (legacy, trusted — the web app's real path), minted JWT bearer (built, currently rolled back pending a secret alignment across services), and `wsp_` machine keys for MCP. Impersonation hardening (retiring the trusted header) and a workspace-membership guard are **staged, deliberate open items** — the standing rule is: no second real user and no public signup until both land. `DEV_BYPASS_AUTH` gates the dev-user seed path and defaults off in production.
+The platform runs **single-user by design** right now. Two identity paths exist in the code today: the `x-user-id` header (legacy, trusted — the web app's real path) and `wsp_` machine keys for MCP. A third — minted JWT bearer for the human path — was built and deployed, then reverted after a cross-service secret mismatch broke login; it lives in git history pending a secret alignment and retry. Impersonation hardening (retiring the trusted header) and a workspace-membership guard are **staged, deliberate open items** — the standing rule is: no second real user and no public signup until both land. `DEV_BYPASS_AUTH` gates the dev-user seed path and defaults off in production.
 
 ## 9. Testing and quality culture
 
 - **Vitest, colocated**, per package (`pnpm --filter <pkg> test`): ~1,350 tests across api/web/desktop-agent/gws-extension. API tests run on PGlite (fast, no Docker) — with the caveat that parallel workers share the file-backed data dir, which can flake; deleting `packages/api/data/pglite` resets it.
 - **Baselines, not perfection:** web typecheck is 0-errors and must stay 0; the API carries a known ~91-error baseline (measured, tracked, advisory in the deploy image). The bar for changes is "no new errors, failing-test set unchanged".
 - **Preflight gates** (`scripts/preflight/`) are runnable experiments that gate pipeline changes with measurements (e.g. facet separation) rather than vibes.
-- **Audit reports** (`docs/audits/`, 30+): every significant change ships with a written audit of what was done and how it was verified — the engineering diary of the project.
+- **Audit reports** (`docs/audits/`, 44 of them): every significant change ships with a written audit of what was done and how it was verified — the engineering diary of the project.
 
 ## 10. Deploy and operations
 
