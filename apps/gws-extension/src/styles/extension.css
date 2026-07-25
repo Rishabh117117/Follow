@@ -1,0 +1,15 @@
+/*
+ * Follow GWS Extension — minimal external CSS.
+ * Most styles are injected into the shadow DOM via JS (extension-css.ts).
+ * This file only contains styles needed at the page level (e.g., the host element).
+ */
+
+#follow-gws-root {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+}

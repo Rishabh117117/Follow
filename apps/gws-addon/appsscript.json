@@ -1,0 +1,33 @@
+{
+  "timeZone": "America/New_York",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/presentations",
+    "https://www.googleapis.com/auth/script.container.ui",
+    "https://www.googleapis.com/auth/script.external_request",
+    "https://www.googleapis.com/auth/userinfo.email"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Follow \u2014 Smart Documents",
+      "logoUrl": "https://follow.app/icon-48.png",
+      "layoutProperties": { "primaryColor": "#6366F1" }
+    },
+    "docs": {
+      "onFileScopeGrantedTrigger": { "runFunction": "onFileScopeGranted" },
+      "homepageTrigger": { "runFunction": "onDocsHomepage" }
+    },
+    "sheets": {
+      "onFileScopeGrantedTrigger": { "runFunction": "onFileScopeGranted" },
+      "homepageTrigger": { "runFunction": "onSheetsHomepage" }
+    },
+    "slides": {
+      "onFileScopeGrantedTrigger": { "runFunction": "onFileScopeGranted" },
+      "homepageTrigger": { "runFunction": "onSlidesHomepage" }
+    }
+  }
+}

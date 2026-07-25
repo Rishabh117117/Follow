@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 300px;
+      background: #FFFFFF;
+      color: #202124;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+    }
+
+    /* ── Header ─────────────────────── */
+    .wa-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #E8EAED;
+    }
+
+    .wa-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .wa-logo {
+      width: 28px;
+      height: 28px;
+      background: #6366F1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .wa-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #202124;
+    }
+
+    .wa-version {
+      font-size: 9px;
+      color: #16A34A;
+      background: #F0FDF4;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 4px;
+    }
+
+    .wa-settings-btn {
+      background: none;
+      border: none;
+      color: #9AA0A6;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .wa-settings-btn:hover { background: #F1F3F4; color: #5F6368; }
+
+    /* ── Body ───────────────────────── */
+    .wa-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ── Live Toggle ────────────────── */
+    .wa-live-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: #F8F9FA;
+      border-radius: 10px;
+      border: 1px solid #E8EAED;
+    }
+
+    .wa-live-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wa-live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #DADCE0;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .wa-live-dot.active {
+      background: #22c55e;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+      animation: wa-live-pulse 2s infinite;
+    }
+
+    @keyframes wa-live-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    .wa-live-label { font-size: 13px; font-weight: 500; color: #202124; }
+    .wa-live-status { font-size: 11px; color: #5F6368; }
+    .wa-live-status.active { color: #16A34A; }
+
+    .wa-live-toggle {
+      width: 40px;
+      height: 22px;
+      background: #DADCE0;
+      border: none;
+      border-radius: 11px;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .wa-live-toggle.active { background: #22c55e; }
+    .wa-live-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .wa-live-toggle.active::after { transform: translateX(18px); }
+
+    /* ── Open Workspace Button ──────── */
+    .wa-open-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 10px;
+      background: #6366F1;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .wa-open-btn:hover { background: #4F46E5; }
+
+    /* ── Status Info ────────────────── */
+    .wa-status {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 0;
+    }
+
+    .wa-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .wa-status-label { color: #5F6368; }
+    .wa-status-value { color: #202124; font-weight: 500; }
+    .wa-status-value.connected { color: #16A34A; }
+    .wa-status-value.disconnected { color: #EA4335; }
+
+    /* ── Doc Intel Button ──────────── */
+    .wa-doc-intel-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 8px;
+      background: #F8F9FA;
+      color: #5F6368;
+      border: 1px solid #E8EAED;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .wa-doc-intel-btn:hover { background: #F1F3F4; border-color: #DADCE0; color: #202124; }
+
+    /* ── Settings Panel ────────────── */
+    .wa-settings {
+      display: none;
+      padding: 16px;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .wa-settings.open { display: flex; }
+
+    .wa-settings-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #202124;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .wa-settings-back {
+      background: none;
+      border: none;
+      color: #5F6368;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .wa-settings-back:hover { background: #F1F3F4; }
+
+    .wa-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .wa-field label {
+      font-size: 11px;
+      color: #5F6368;
+      font-weight: 500;
+    }
+    .wa-field input {
+      background: #F8F9FA;
+      border: 1px solid #E8EAED;
+      color: #202124;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .wa-field input:focus { outline: none; border-color: #6366F1; }
+
+    .wa-settings-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .wa-save-btn, .wa-cancel-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .wa-save-btn { background: #6366F1; color: white; }
+    .wa-save-btn:hover { background: #4F46E5; }
+    .wa-cancel-btn { background: #F1F3F4; color: #5F6368; }
+    .wa-cancel-btn:hover { background: #E8EAED; }
+
+    .wa-hint {
+      font-size: 10px;
+      color: #9AA0A6;
+      text-align: center;
+      padding: 4px 0 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="wa-header">
+    <div class="wa-header-left">
+      <span class="wa-logo">F</span>
+      <span class="wa-title">Follow</span>
+      <span class="wa-version" id="wa-version"></span>
+    </div>
+    <button class="wa-settings-btn" id="wa-settings-btn" title="Settings">&#9881;</button>
+  </div>
+
+  <!-- Main View -->
+  <div class="wa-body" id="wa-main-view">
+    <!-- Live Toggle -->
+    <div class="wa-live-row">
+      <div class="wa-live-info">
+        <span class="wa-live-dot" id="wa-live-dot"></span>
+        <div>
+          <div class="wa-live-label">Live Recording</div>
+          <div class="wa-live-status" id="wa-live-status">Off</div>
+        </div>
+      </div>
+      <button class="wa-live-toggle" id="wa-live-toggle" title="Toggle live recording"></button>
+    </div>
+
+    <!-- Open Workspace -->
+    <button class="wa-open-btn" id="wa-open-btn">
+      <span>&#8599;</span> Open Workspace
+    </button>
+
+    <!-- Doc Intel -->
+    <button class="wa-doc-intel-btn" id="wa-doc-intel-btn" title="Check writing on this page (Ctrl+Shift+G)">
+      &#9998; Check Writing on Page
+    </button>
+
+    <!-- Status -->
+    <div class="wa-status">
+      <div class="wa-status-row">
+        <span class="wa-status-label">Connection</span>
+        <span class="wa-status-value" id="wa-connection-status">Checking...</span>
+      </div>
+      <div class="wa-status-row">
+        <span class="wa-status-label">Signals captured</span>
+        <span class="wa-status-value" id="wa-signal-count">0</span>
+      </div>
+    </div>
+
+    <div class="wa-hint">Chat with Follow AI in the workspace editor</div>
+  </div>
+
+  <!-- Settings View -->
+  <div class="wa-settings" id="wa-settings-view">
+    <div class="wa-settings-title">
+      Settings
+      <button class="wa-settings-back" id="wa-settings-back">&times;</button>
+    </div>
+    <div class="wa-field">
+      <label>API URL</label>
+      <input type="text" id="wa-api-url" placeholder="http://localhost:3001" />
+    </div>
+    <div class="wa-field">
+      <label>API Key</label>
+      <input type="password" id="wa-api-key" placeholder="wsp_..." />
+    </div>
+    <div class="wa-field">
+      <label>Workspace ID</label>
+      <input type="text" id="wa-workspace-id" placeholder="UUID" />
+    </div>
+    <div class="wa-field">
+      <label>User ID (optional)</label>
+      <input type="text" id="wa-user-id" placeholder="UUID" />
+    </div>
+    <div class="wa-settings-actions">
+      <button class="wa-cancel-btn" id="wa-cancel-settings">Cancel</button>
+      <button class="wa-save-btn" id="wa-save-settings">Save</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

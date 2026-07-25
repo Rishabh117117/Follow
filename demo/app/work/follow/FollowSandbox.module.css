@@ -1,0 +1,1893 @@
+/* =========================================================================
+   Follow team-memory sandbox — burnt-orange accent inherited from the page
+   root; tool-colored avatars (Claude/ChatGPT/Gemini) carry the "between your
+   AI tools" story; contested entries flag in navy. Frame chrome follows the
+   shared browser-frame convention.
+   ========================================================================= */
+
+.frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--card);
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.04),
+    0 16px 40px rgba(26, 26, 26, 0.07);
+}
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: 0 0 auto;
+}
+.url {
+  margin-left: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- topbar ---------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+}
+.brandName {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+.brandDot {
+  color: var(--accent);
+}
+.brandSup {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin-left: 6px;
+}
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.wsName {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wsMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  white-space: nowrap;
+}
+.topRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.syncPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--paper);
+  white-space: nowrap;
+}
+.syncDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.contestedPill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--navy, #0a1f33);
+  background: transparent;
+  border: 1px solid var(--navy, #0a1f33);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.contestedPill:hover {
+  background: color-mix(in srgb, var(--navy, #0a1f33) 8%, transparent);
+}
+.contestedPillOn {
+  background: var(--navy, #0a1f33);
+  color: #fff;
+}
+
+/* ---------------- 3-region body ---------------- */
+.body {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr) 296px;
+  height: min(76vh, 760px);
+  background: var(--card);
+}
+
+/* ---------------- rail ---------------- */
+.rail {
+  border-right: 1px solid var(--line);
+  background: var(--paper);
+  padding: 14px 12px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.railLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin: 0 0 8px 2px;
+}
+.viewList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.viewBtn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 11px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.viewBtn:hover {
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+.viewOn,
+.viewOn:hover {
+  background: var(--card);
+  border-color: var(--line);
+  box-shadow: var(--shadow-rest);
+  color: var(--accent-deep);
+}
+.viewCount {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.viewOn .viewCount {
+  color: var(--accent-deep);
+  border-color: var(--accent-wash);
+  background: var(--accent-tint);
+}
+
+/* team list — tool-colored avatars sell "between your AI tools" */
+.team {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.teamRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+}
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.avatarSm {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+.avatarLg {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
+.toolClaude {
+  background: #d97757;
+}
+.toolChatGPT {
+  background: #10a37f;
+}
+.toolGemini {
+  background: #4285f4;
+}
+/* file/doc-sourced provenance — round avatar slot holding 📄 instead of an
+   initial, so doc facts sit visually consistent with chat-sourced ones */
+.avatarDoc {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 10px;
+}
+.teamWho {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.teamName {
+  font-size: 12px;
+  font-weight: 650;
+}
+.teamTool {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--soft);
+}
+.teamCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: var(--card);
+}
+
+.stats {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+}
+.statName {
+  font-size: 11.5px;
+  color: var(--soft);
+}
+.statVal {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.statHot {
+  color: var(--navy, #0a1f33);
+}
+
+/* ---------------- main ---------------- */
+.main {
+  overflow-y: auto;
+  padding: 16px 18px 22px;
+  background: color-mix(in srgb, var(--paper) 55%, var(--card));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mainHead {
+  margin-bottom: 2px;
+}
+.mainTitle {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 3px;
+}
+.mainBlurb {
+  font-size: 12.5px;
+  color: var(--soft);
+  margin: 0;
+  line-height: 1.5;
+}
+.empty {
+  font-size: 12.5px;
+  color: var(--soft);
+  margin: 8px 0 0;
+}
+.search {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+}
+.search:focus {
+  outline: 2px solid var(--accent-wash);
+  border-color: var(--accent);
+}
+.topicRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.topicChip {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--card);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.topicChip:hover {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+.topicOn {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.topicOn .topicCount {
+  color: #fff;
+}
+.topicZap {
+  color: inherit;
+}
+.topicCount {
+  margin-left: 5px;
+  color: var(--soft);
+  font-size: 9px;
+}
+
+/* memory entries */
+.entry {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 13px;
+}
+.entryHot {
+  border-color: color-mix(in srgb, var(--navy, #0a1f33) 45%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy, #0a1f33) 7%, transparent);
+}
+.claim {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0 0 8px;
+  font-weight: 550;
+}
+.provRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.prov {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+}
+.kind {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.kind_decision {
+  color: var(--accent-deep);
+  background: var(--accent-tint);
+}
+.kind_finding {
+  color: var(--soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.kind_constraint {
+  color: #fff;
+  background: color-mix(in srgb, var(--navy, #0a1f33) 82%, #fff);
+}
+.topicTag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--soft);
+  margin-left: auto;
+}
+.conflict {
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--navy, #0a1f33) 6%, var(--card));
+  border-left: 2px solid var(--navy, #0a1f33);
+  border-radius: 0 6px 6px 0;
+}
+.conflictBadge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #fff;
+  background: var(--navy, #0a1f33);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-right: 8px;
+}
+
+/* directory */
+.person {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px 15px;
+}
+.personHead {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.personName {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+.personMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  margin: 0;
+}
+.personCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-deep);
+  background: var(--accent-tint);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+/* claude.md-style brief — small, soft, reads as prose (not the mono metadata
+   around it) */
+.personBrief {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-2, var(--ink));
+}
+/* faint mono note under the brief — same convention as .dirFoot/.wsMeta */
+.briefNote {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--soft);
+  margin: 4px 0 0;
+}
+.personTopics {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.personTopic {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--paper);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.personTopic:hover {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+.dirFoot {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--soft);
+  margin: 2px 0 0;
+}
+
+/* ---------------- Ask Follow dock ---------------- */
+.assist {
+  border-left: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.assistHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.assistTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.assistDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.assistDotOff {
+  background: var(--soft);
+  box-shadow: 0 0 0 3px var(--line);
+}
+.assistStatus {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.assistThread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.msg {
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 8px 11px;
+  border-radius: 10px 10px 10px 3px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  max-width: 92%;
+  align-self: flex-start;
+  white-space: pre-wrap;
+}
+.msgUser {
+  align-self: flex-end;
+  border-radius: 10px 10px 3px 10px;
+  background: var(--accent-tint);
+  border-color: var(--accent-wash);
+}
+.msgErr {
+  border-style: dashed;
+  color: var(--soft);
+}
+.typing {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  padding-left: 2px;
+  animation: fsPulse 1.2s ease-in-out infinite;
+}
+@keyframes fsPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing {
+    animation: none;
+  }
+}
+.chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.chip {
+  text-align: left;
+  font-size: 11px;
+  color: var(--accent-deep);
+  background: transparent;
+  border: 1px dashed var(--accent-wash);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.chip:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+.assistFoot {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+.assistInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.assistInput:focus {
+  outline: 2px solid var(--accent-wash);
+  border-color: var(--accent);
+}
+.assistSend {
+  width: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.assistSend:hover:not(:disabled) {
+  background: var(--accent-deep);
+}
+.assistSend:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------------- honesty strip ---------------- */
+.honesty {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--soft);
+  flex-wrap: wrap;
+}
+
+/* mobile-app-shell elements — hidden entirely on desktop/tablet; the ≤719px
+   block below turns them on and positions them. Keeping the "off" state a
+   single rule here means desktop is provably untouched. */
+.mobileTabBar,
+.moreBackdrop,
+.moreSheet {
+  display: none;
+}
+
+/* ---------------- responsive ---------------- */
+@media (max-width: 1119px) {
+  .body {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 340px;
+    height: min(88vh, 900px);
+  }
+  .assist {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+/* =========================================================================
+   MOBILE APP SHELL (≤719px) — the sandbox stops being a shrunk-down desktop
+   and becomes a real mobile app: a fixed-height surface, a native header (no
+   browser chrome), one full-screen view at a time that scrolls internally,
+   Ask Follow as a full-screen tab, and a bottom tab bar (Items · Facts · Ask
+   · More) with a slide-up More sheet. All scoped to ≤719px — desktop/tablet
+   layouts above are untouched.
+   ========================================================================= */
+@media (max-width: 719px) {
+  .frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: min(82vh, 720px);
+    height: min(82svh, 720px); /* stable viewport height — no resize as the mobile URL bar shows/hides */
+    min-height: 520px;
+    --mtab-h: 58px;
+  }
+  .chrome {
+    display: none; /* drop the fake browser chrome for a native header */
+  }
+
+  /* ---- header (the desktop topbar, restyled as an app title bar) ---- */
+  .topbar {
+    flex: 0 0 auto;
+    gap: 8px 10px;
+    padding: 11px 14px;
+  }
+  .workspace {
+    display: none; /* the view titles + More sheet carry workspace context */
+  }
+  .brandName {
+    font-size: 16px;
+  }
+
+  /* ---- content region — full-bleed, one view at a time ---- */
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    display: block;
+    position: relative;
+    grid-template-columns: none;
+    grid-template-rows: none;
+  }
+  .rail {
+    display: none; /* replaced by the tab bar + More sheet */
+  }
+  .main {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain; /* the feed's scroll doesn't chain into the page */
+    padding: 14px 14px 20px;
+  }
+
+  /* ---- Ask Follow: hidden until its tab is active, then full-screen ---- */
+  .assist {
+    display: none;
+  }
+  .assistMobileOpen {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    border: 0;
+    background: var(--card);
+  }
+
+  /* ---- honesty strip stays, slimmed to one line ---- */
+  .honesty {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    font-size: 9px;
+  }
+  .honestyRight {
+    display: none;
+  }
+
+  .topicTag {
+    display: none;
+  }
+
+  /* ---- bottom tab bar ---- */
+  .mobileTabBar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    border-top: 1px solid var(--line);
+    background: var(--card);
+    z-index: 7;
+  }
+  .mobileTab {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: var(--mtab-h);
+    padding: 7px 4px;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: var(--soft);
+    position: relative;
+    transition: color 0.15s ease;
+  }
+  .mobileTab svg {
+    width: 21px;
+    height: 21px;
+  }
+  .mobileTabLabel {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+  }
+  .mobileTabOn {
+    color: var(--accent-deep);
+  }
+  .mobileTabDot {
+    position: absolute;
+    top: 7px;
+    left: calc(50% + 8px);
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  /* ---- More sheet + backdrop ---- */
+  .moreBackdrop {
+    display: block;
+    position: absolute;
+    inset: 0 0 var(--mtab-h) 0; /* leaves the tab bar tappable */
+    background: color-mix(in srgb, var(--ink) 30%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 8;
+  }
+  .moreBackdropOn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .moreSheet {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--mtab-h);
+    max-height: 78%;
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -14px 34px rgba(26, 26, 26, 0.16);
+    /* fully hide below the frame: its own height PLUS the tab-bar offset it
+       sits above (translateY % alone leaves a ~mtab-h peek of the grab
+       handle) */
+    transform: translateY(calc(100% + var(--mtab-h) + 4px));
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 9;
+    overflow: hidden;
+    padding: 8px 14px 16px;
+  }
+  .moreSheetOn {
+    transform: translateY(0);
+  }
+  .moreGrab {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--line);
+    margin: 2px auto 8px;
+    flex: 0 0 auto;
+  }
+  .moreTitle {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--soft);
+    margin: 0 2px 8px;
+  }
+  .moreScroll {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .moreRow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    text-align: left;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .moreRowOn {
+    border-color: var(--accent-wash);
+    background: var(--accent-tint);
+    color: var(--accent-deep);
+  }
+  .moreRowIcon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    color: var(--soft);
+  }
+  .moreRowOn .moreRowIcon {
+    color: var(--accent-deep);
+  }
+  .moreRowIcon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .moreRowCount {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--soft);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .moreOverview {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+  }
+  .moreTeam,
+  .moreStats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moreSheet,
+  .moreBackdrop {
+    transition: none;
+  }
+}
+
+
+/* ---------------- MCP console (FOLLOW-MCP-1) ---------------- */
+.console {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.consoleIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.consoleLede {
+  font-size: 12px;
+  color: var(--soft);
+  line-height: 1.55;
+  margin: 0;
+}
+.toolLegend {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.toolChip {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--card);
+  cursor: help;
+}
+.repoLink {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--accent-deep);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-wash);
+  white-space: nowrap;
+}
+.repoLink:hover {
+  border-bottom-color: var(--accent);
+}
+.consoleThread {
+  flex: 1;
+  min-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 12px;
+}
+.consoleEmpty {
+  font-size: 12px;
+  color: var(--soft);
+  line-height: 1.6;
+  margin: 0;
+}
+.toolCard {
+  border: 1px solid color-mix(in srgb, var(--navy, #0a1f33) 30%, var(--line));
+  border-left: 3px solid var(--navy, #0a1f33);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--navy, #0a1f33) 4%, var(--card));
+  padding: 8px 10px;
+  max-width: 96%;
+}
+.toolCardErr {
+  border-left-color: var(--accent);
+}
+.toolHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.toolName {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--navy, #0a1f33);
+}
+.toolTag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--navy, #0a1f33);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.toolArgs,
+.toolRes {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.toolResHead {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin: 6px 0 4px;
+}
+
+.mcpWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mcpHidden {
+  display: none;
+}
+
+/* =========================================================================
+   FOLLOW-PRODUCT-1 — the dashboard replica: All items · Conversations ·
+   Files · Facts (existing Team memory). Day groups, the unified feed rows,
+   master-detail (Conversations/Files), transcript blocks (thinking + the
+   shared ⚙ tool-card pattern), the doc reader, and the facts footer.
+   ========================================================================= */
+
+/* ---------------- loading skeleton (lazy chats+docs) ---------------- */
+.loadingSkeleton {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--soft);
+  padding: 14px 2px;
+}
+
+/* ---------------- day groups (All items / Conversations / Files) ---------------- */
+.dayGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dayHeader {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin: 10px 0 2px 2px;
+}
+.dayGroup:first-child .dayHeader {
+  margin-top: 0;
+}
+.dayRows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------------- All items feed rows ---------------- */
+.feedRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.feedRow:hover {
+  border-color: var(--accent-wash);
+  box-shadow: var(--shadow-rest);
+}
+.feedBadge {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  border-radius: 6px;
+}
+.feedBadgeConvo {
+  background: var(--paper);
+}
+.feedBadgeFile {
+  background: var(--paper);
+}
+.feedBadgeFact {
+  background: var(--accent-tint);
+  color: var(--accent-deep);
+}
+.feedMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.feedTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedZap {
+  color: var(--navy, #0a1f33);
+}
+.feedSnippet {
+  font-size: 11px;
+  color: var(--soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedMeta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.feedWho {
+  font-size: 10.5px;
+  color: var(--soft);
+  white-space: nowrap;
+}
+.feedFactWrap {
+  display: flex;
+  flex-direction: column;
+}
+.feedFactBody {
+  margin: 4px 0 2px 32px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--paper) 60%, var(--card));
+  border: 1px dashed var(--line);
+  border-radius: 0 8px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.feedFactBody .claim {
+  margin: 0;
+}
+
+/* "open source →" affordance — used in All items, Facts, and (soon) any
+   fact card that resolves a source via fSourceForEntry */
+.openSource {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent-deep);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-wash);
+}
+.openSource:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* ---------------- master-detail (Conversations / Files) ---------------- */
+.masterDetail {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.mdList {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+.mdRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.mdRow:hover {
+  border-color: var(--accent-wash);
+}
+.mdRowOn,
+.mdRowOn:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent-wash);
+}
+.mdRowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mdRowTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdRowSub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdDetail {
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.mdBack {
+  display: none;
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-deep);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ---------------- transcript / doc reader header (shared) ---------------- */
+.transcriptHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.transcriptHeadMain {
+  flex: 1;
+  min-width: 0;
+}
+.transcriptTitle {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 3px;
+}
+.transcriptSub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.docKindBadge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  background: var(--accent-tint);
+  border-radius: 6px;
+  padding: 2px 6px;
+  flex: 0 0 auto;
+}
+.docKindBadgeLg {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  background: var(--accent-tint);
+  border-radius: 8px;
+  padding: 6px 10px;
+  flex: 0 0 auto;
+}
+
+/* ---------------- transcript blocks ---------------- */
+.transcriptScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.assistantTurn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+}
+.assistantLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin-left: 2px;
+}
+.thinking {
+  max-width: 92%;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--paper) 70%, var(--card));
+}
+.thinkingSummary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  cursor: pointer;
+  list-style: none;
+}
+.thinkingSummary::-webkit-details-marker {
+  display: none;
+}
+.thinkingSummary::marker {
+  content: "";
+}
+.thinkingBody {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--soft);
+  margin: 6px 0 0;
+}
+
+/* ---------------- doc reader (markdown-subset renderer) ---------------- */
+.docReader {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docH2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 16px 0 4px;
+}
+.docReader > .docH2:first-child {
+  margin-top: 0;
+}
+.docH3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--soft);
+  margin: 12px 0 3px;
+}
+.docPara {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+.docList {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docList li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.docQuote {
+  margin: 6px 0 10px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-tint);
+  border-radius: 0 6px 6px 0;
+}
+.docQuote p {
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.55;
+  margin: 0;
+  color: var(--ink);
+}
+.docQuote p + p {
+  margin-top: 4px;
+}
+
+/* ---------------- facts footer (Conversations + Files) ---------------- */
+.factsFooter {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.factsFooterHead {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin: 0;
+}
+.factsFooterChips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.factChip {
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.factChip:hover {
+  border-color: var(--accent);
+}
+.factChipZap {
+  color: var(--navy, #0a1f33);
+}
+.factCountChip {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  background: var(--paper);
+}
+
+/* ---------------- responsive: master-detail stacks ≤880px ---------------- */
+@media (max-width: 880px) {
+  .masterDetail {
+    display: block;
+  }
+  .mdList {
+    display: none;
+  }
+  .mdListShowMobile {
+    display: flex;
+  }
+  .mdDetail {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .mdDetailHideMobile {
+    display: none;
+  }
+  .mdBack {
+    display: inline-block;
+  }
+}
+
+/* --------- collapsed tool calls in captured transcripts ---------------- */
+/* one-line brief (⚙ name · key arg → result gist); expand for the full
+   args/result wire card */
+.toolDetails {
+  max-width: 96%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 55%, var(--card));
+  overflow: hidden;
+}
+.toolDetails:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.toolDetailsErr {
+  border-color: color-mix(in srgb, #b3423a 55%, var(--line));
+}
+.toolSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--soft);
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.toolSummary::-webkit-details-marker {
+  display: none;
+}
+.toolSummary::marker {
+  content: "";
+}
+.toolBriefArg {
+  flex: none;
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  opacity: 0.72;
+}
+.toolBriefRes {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolMore {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+.toolDetails[open] .toolMore {
+  transform: rotate(180deg);
+}
+.toolDetailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toolMore {
+    transition: none;
+  }
+}
+
+/* --------- Ask Follow: compact live tool steps (product-style) ---------- */
+/* ✳ Thinking / ⚙ Query index rows, the way the shipped product renders the
+   loop — request/result expand on click; the console keeps the raw wire */
+.dockStep {
+  max-width: 96%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 60%, var(--card));
+}
+.dockStep:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.dockStepErr {
+  border-color: color-mix(in srgb, #b3423a 55%, var(--line));
+}
+.dockStepSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 9px;
+  cursor: pointer;
+  list-style: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.dockStepSummary::-webkit-details-marker {
+  display: none;
+}
+.dockStepSummary::marker {
+  content: "";
+}
+.dockStepName {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dockStepGist {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+}
+.dockStepChev {
+  flex: none;
+  font-size: 10px;
+  color: var(--soft);
+  transition: transform 0.15s ease;
+}
+.dockStep[open] .dockStepChev {
+  transform: rotate(180deg);
+}
+.dockStepIo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 9px 9px;
+}
+.dockStepIoLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.dockThinkBody {
+  margin: 0;
+  padding: 0 9px 9px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dockStepChev {
+    transition: none;
+  }
+}
+
+/* =========================================================================
+   Graph view (FOLLOW-GRAPH-1) — the hand-rolled 3D knowledge graph. Canvas
+   fills the wrap; the tooltip is an absolutely-positioned HTML div synced to
+   the hovered node's projected screen point. Card/line/soft/accent tokens
+   only — no new colors introduced beyond the graph's own kind-palette
+   (defined inline in GraphView.tsx, since it must match the live product's
+   fixed per-tool/per-kind colors rather than the page accent).
+   ========================================================================= */
+.graphBlurb {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--soft);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.graphWrap {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+  touch-action: none; /* pointer drag/rotate owns touch gestures, not scroll */
+}
+.graphCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.graphTooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 220px;
+  padding: 7px 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-rest, 0 4px 16px rgba(26, 26, 26, 0.12));
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  pointer-events: none;
+  z-index: 2;
+}
+.graphTooltipKind {
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.graphTooltipLabel {
+  font-family: var(--font-body, inherit);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: normal;
+  word-break: break-word;
+}
+.graphTooltipZap {
+  color: var(--navy, #0a1f33);
+  font-weight: 700;
+}
+.graphTooltipHint {
+  color: var(--accent-deep);
+  font-size: 9.5px;
+}
+.graphLegend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--soft);
+}
+.graphLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.graphDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.graphZap {
+  color: var(--navy, #0a1f33);
+}
+.graphHint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--soft);
+  margin: 6px 0 0;
+}
+@media (max-width: 719px) {
+  /* fallback height if the graph is ever shown outside the mainGraph shell */
+  .graphWrap {
+    height: 420px;
+  }
+
+  /* Graph view hands the canvas most of the screen: the wrapper flexes to
+     fill the app-shell content area and the surrounding prose is trimmed. */
+  .mainGraph {
+    overflow: hidden;
+    padding-bottom: 12px;
+  }
+  .mainGraph .mainBlurb,
+  .mainGraph .graphBlurb {
+    display: none;
+  }
+  .mainGraph .graphWrap {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 240px;
+    /* full-screen canvas: drag rotates — nothing to scroll past in this view */
+    touch-action: none;
+  }
+  .mainGraph .graphLegend {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 12px;
+    margin-top: 8px;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mainGraph .graphLegendItem {
+    flex: 0 0 auto;
+  }
+  .mainGraph .graphHint {
+    margin: 6px 0 0;
+  }
+}

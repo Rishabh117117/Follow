@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "Workspace Agent",
+  "version": "12.0.0",
+  "description": "AI workspace agent — signal tracking, context capture, document intelligence",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "scripting",
+    "tabs",
+    "idle",
+    "webNavigation"
+  ],
+  "host_permissions": ["http://localhost:*/*", "http://127.0.0.1:*/*", "https://*/*"],
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "toggle-doc-intel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+G",
+        "mac": "Command+Shift+G"
+      },
+      "description": "Toggle document intelligence on focused text field"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://docs.google.com/document/*"],
+      "js": ["doc-intel-early-capture.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "content.js",
+        "doc-intel-detector.js",
+        "doc-intel-overlay.js",
+        "doc-intel-card-web.js",
+        "doc-intel-toolbar.js",
+        "doc-intel-pdf.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icon48.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

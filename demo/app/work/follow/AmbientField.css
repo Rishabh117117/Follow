@@ -1,0 +1,74 @@
+/* Follow — page-wide ambient backdrop (DESIGN-PHASE-1 motion, v4).
+   A fixed, full-viewport soft-light layer behind the whole page (z-index 0; page
+   content sits on a z-index:1 layer above it). Blue (#1C39BB, the site default
+   accent) + orange (#C2410C) orbs; per-orb opacity is JS-driven for the
+   scroll-based colour cross-fade, so CSS only sets position, size, blur, colour. */
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ambient .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+}
+/* orange orbs */
+.ambient .o1 {
+  width: 46vw;
+  height: 46vw;
+  max-width: 640px;
+  max-height: 640px;
+  top: -10vh;
+  left: -8vw;
+  background: radial-gradient(circle, rgba(194, 65, 12, 0.27), transparent 70%);
+}
+.ambient .o2 {
+  width: 34vw;
+  height: 34vw;
+  max-width: 460px;
+  max-height: 460px;
+  top: 30vh;
+  right: 2vw;
+  background: radial-gradient(circle, rgba(194, 65, 12, 0.22), transparent 72%);
+}
+/* blue orbs */
+.ambient .b1 {
+  width: 52vw;
+  height: 52vw;
+  max-width: 720px;
+  max-height: 720px;
+  bottom: -16vh;
+  right: -10vw;
+  background: radial-gradient(circle, rgba(28, 57, 187, 0.22), transparent 72%);
+}
+.ambient .b2 {
+  width: 32vw;
+  height: 32vw;
+  max-width: 440px;
+  max-height: 440px;
+  bottom: 6vh;
+  left: 0vw;
+  background: radial-gradient(circle, rgba(28, 57, 187, 0.19), transparent 72%);
+}
+
+/* resting opacity = the motion baseline (intro: orange 0.7, blue 0.55), so the
+   pre-first-frame paint and reduced-motion users match motion mode rather than
+   rendering every orb at full strength. The rAF loop overrides this in motion. */
+.ambient .o1,
+.ambient .o2 {
+  opacity: 0.7;
+}
+.ambient .b1,
+.ambient .b2 {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient .orb {
+    transform: none !important;
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/api", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/web", "dev", "--", "-p", "4567"],
+      "port": 4567,
+      "autoPort": true
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "scripts", "-p", "4100", "-c-1", "--silent"],
+      "port": 4100
+    },
+    {
+      "name": "mockup",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "mockup", "-p", "4200", "-c-1", "--silent"],
+      "port": 4200
+    }
+  ]
+}

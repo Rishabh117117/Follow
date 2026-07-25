@@ -1,0 +1,1531 @@
+/* Follow — the system, in one picture (FOLLOW-SYS-1).
+   Replaces the framed "With Follow" CompareDiagram twin + the technical
+   pipeline reel with ONE borderless interactive diagram: no panel, the
+   pieces float straight over the page ambient; the shared layer is a
+   Follow-colored slab; and hovering / tapping / focusing a station explains
+   what happens there in plain terms via the caption dock below (a
+   persistent aria-live region).
+
+   The slab OPENS (click, aria-expanded): an inside view unfolds from its
+   top edge — a dark viewport holding a miniature of the sandbox's real
+   knowledge graph (same ontology as lib/followGraph.ts: member /
+   conversation / file / fact / topic nodes; authored / uploaded / produced /
+   topic / contradicts edges; GraphView's color language — facts accent,
+   tools colored, files gold) plus the shipped product's versioning story
+   (v2 supersedes v1, the old version ghosts, never deleted). One 16s CSS
+   loop, restarted on every open; reduced motion gets the finished static
+   picture. Client component; global CSS namespaced under .fsys. */
+
+.fsys {
+  /* the read path keeps Persian blue (the site default this page's orange
+     overrode) — write = orange, read = blue, matching the page ambient */
+  --fsys-blue: #1c39bb;
+  /* tool colors — the same trio the sandbox avatars use */
+  --fsys-claude: #d97757;
+  --fsys-chatgpt: #10a37f;
+  --fsys-gemini: #4285f4;
+  position: relative;
+  max-width: 780px;
+  margin-inline: auto;
+  font-family: var(--font-body);
+}
+
+.fsysStage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- every station is a real button: hover + tap + keyboard all work ---- */
+.fsysHit {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  transition: opacity var(--t-fast) var(--e-snappy);
+}
+.fsysHit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* de-emphasize everything that isn't the active station (.fsysLayer is the
+   slab WRAPPER — its inner button must not dim on top of it, or the two
+   opacities multiply) */
+.fsysHas .fsysTeam,
+.fsysHas .fsysDocs,
+.fsysHas .fsysPill,
+.fsysHas .fsysLayer {
+  opacity: 0.42;
+}
+.fsys[data-active="team"] .fsysTeam,
+.fsys[data-active="docs"] .fsysDocs,
+.fsys[data-active="capture"] .fsysPillCap,
+.fsys[data-active="layer"] .fsysLayer,
+.fsys[data-active="recall"] .fsysPillRec {
+  opacity: 1;
+}
+
+/* ---- row 1 · the sources: three person·tool pairs + the team's docs ----
+   Four equal columns so each source sits over its own wire lane
+   (12.5 / 37.5 / 62.5 / 87.5%); the team button spans the three chat
+   columns with its own inner grid, the docs button takes the fourth. */
+.fsysRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.fsysTeam {
+  grid-column: 1 / 4;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+}
+/* the docs chip sits a notch lower — a source, not a teammate */
+.fsysDocs {
+  grid-column: 4;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin-top: 14px;
+}
+.fsysAvDoc {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--gold);
+  flex: none;
+}
+.fsysAvDoc i {
+  display: block;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.9);
+}
+.fsysAvDoc i + i {
+  width: 8px;
+}
+.fsysPair {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 62%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow:
+    var(--shadow-rest),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transition: box-shadow var(--t-fast) var(--e-snappy);
+}
+.fsys[data-active="team"] .fsysPair {
+  box-shadow:
+    var(--shadow-lift),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+.fsysAv {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  flex: none;
+}
+.fsysAvClaude {
+  background: var(--fsys-claude);
+}
+.fsysAvChatGPT {
+  background: var(--fsys-chatgpt);
+}
+.fsysAvGemini {
+  background: var(--fsys-gemini);
+}
+.fsysWho {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.18;
+}
+.fsysName {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.fsysTool {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--soft);
+}
+
+/* ---- the flow zone · chats down (orange), answers back up (blue) ---- */
+.fsysFlow {
+  position: relative;
+  height: 128px;
+  margin-block: 4px;
+}
+.fsysWires {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+}
+.fsysLine {
+  stroke: color-mix(in srgb, var(--accent) 38%, transparent);
+  stroke-width: 1.6;
+  stroke-dasharray: 2 6;
+  stroke-linecap: round;
+  transition: stroke var(--t-fast) var(--e-snappy);
+}
+.fsys[data-active="capture"] .fsysLine {
+  stroke: color-mix(in srgb, var(--accent) 62%, transparent);
+}
+.fsys[data-active="recall"] .fsysLine {
+  stroke: color-mix(in srgb, var(--fsys-blue) 48%, transparent);
+}
+
+/* the documents lane — gold-tinted wire, write-only square packets */
+.fsysLineDoc {
+  stroke: color-mix(in srgb, var(--gold) 52%, transparent);
+}
+.fsys[data-active="docs"] .fsysLineDoc {
+  stroke: color-mix(in srgb, var(--gold) 85%, transparent);
+}
+
+/* packets ride the wires; the lane offset (±5px) lives in the keyframes so
+   the down and up traffic never overlap. Hidden entirely under reduced
+   motion (no animation → opacity stays 0), like the old diagram's packets.
+   Chat messages are DOTS; documents are SQUARES — the same shape grammar
+   the inside-view graph uses. */
+.fsysPkt {
+  opacity: 0;
+}
+.fsysPktDown {
+  fill: var(--accent);
+}
+.fsysPktUp {
+  fill: var(--fsys-blue);
+}
+.fsysPktDoc {
+  fill: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fsysPktDown {
+    animation: fsysDown 2.1s linear calc(var(--i) * 0.7s) infinite;
+  }
+  .fsysPktUp {
+    animation: fsysUp 2.1s linear calc(var(--i) * 0.7s + 0.35s) infinite;
+  }
+  .fsysPktDoc {
+    animation: fsysDocDown 2.6s linear calc(var(--i) * 1.3s + 0.5s) infinite;
+  }
+}
+/* focusing a flow silences the traffic that isn't its story */
+.fsys[data-active="capture"] .fsysPktUp,
+.fsys[data-active="capture"] .fsysPktDoc,
+.fsys[data-active="recall"] .fsysPktDown,
+.fsys[data-active="recall"] .fsysPktDoc,
+.fsys[data-active="docs"] .fsysPktDown,
+.fsys[data-active="docs"] .fsysPktUp {
+  visibility: hidden;
+}
+@keyframes fsysDocDown {
+  0% {
+    transform: translate(-3.6px, 0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.95;
+  }
+  82% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-3.6px, 138px);
+    opacity: 0;
+  }
+}
+@keyframes fsysDown {
+  0% {
+    transform: translate(-5px, -4px);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.95;
+  }
+  82% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-5px, 130px);
+    opacity: 0;
+  }
+}
+@keyframes fsysUp {
+  0% {
+    transform: translate(5px, 130px);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.95;
+  }
+  82% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(5px, -4px);
+    opacity: 0;
+  }
+}
+
+/* the two flow labels float ON the wires — glass pills, staggered so they
+   never collide on narrow screens. `translate` (the standalone property)
+   centers them; the bob animation uses `transform`, and the two compose. */
+.fsysPill {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  background: color-mix(in srgb, #fff 58%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow:
+    var(--shadow-rest),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  translate: -50% 0;
+}
+.fsysPillCap {
+  left: 37.5%;
+  top: 20px;
+}
+.fsysPillRec {
+  left: 62.5%;
+  top: 74px;
+}
+.fsysPillArrow {
+  font-size: 12px;
+  line-height: 1;
+}
+.fsysPillCap .fsysPillArrow {
+  color: var(--accent);
+}
+.fsysPillRec .fsysPillArrow {
+  color: var(--fsys-blue);
+}
+.fsys[data-active="capture"] .fsysPillCap,
+.fsys[data-active="recall"] .fsysPillRec {
+  box-shadow:
+    var(--shadow-lift),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ---- the shared layer · Follow-colored slab (no border box) ---- */
+.fsysLayer {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--accent-tint), var(--accent-wash));
+  box-shadow:
+    var(--shadow-rest),
+    0 14px 40px color-mix(in srgb, var(--accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  transition:
+    opacity var(--t-fast) var(--e-snappy),
+    box-shadow var(--t-fast) var(--e-snappy);
+}
+.fsys[data-active="layer"] .fsysLayer {
+  box-shadow:
+    var(--shadow-lift),
+    0 18px 48px color-mix(in srgb, var(--accent) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.fsysLayerBtn {
+  display: block;
+  width: 100%;
+  padding: 20px 26px 18px;
+  text-align: center;
+}
+
+/* the hover prompt — always faintly there (touch has no hover), brightens
+   on hover/focus, flips to "close" while open */
+.fsysPeek {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 2;
+  pointer-events: none;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--accent-deep);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 5px 10px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-rest);
+  opacity: 0.6;
+  transition: opacity var(--t-fast) var(--e-snappy);
+}
+.fsysLayer:hover .fsysPeek,
+.fsysLayerBtn:focus-visible .fsysPeek,
+.fsysOpen .fsysPeek {
+  opacity: 1;
+}
+
+/* ---- the inside view · unfolds from the slab's top edge ---- */
+.fsysInside {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.45s var(--e-snappy);
+}
+.fsysOpen .fsysInside {
+  grid-template-rows: 1fr;
+}
+.fsysInsideClip {
+  overflow: hidden;
+  min-height: 0;
+}
+.fsysGWrap {
+  position: relative;
+  margin: 14px 14px 0;
+  border-radius: 12px;
+  background: #0a1f33; /* --navy — the reel's dark world, inside the machine */
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 12px 34px rgba(0, 0, 0, 0.35);
+}
+.fsysGStage {
+  position: relative;
+}
+.fsysG {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- node vocabulary (GraphView's color language, dark-tuned) ---- */
+.fsysGFact {
+  fill: #e8703a; /* facts read accent, like the sandbox Graph view */
+  opacity: 0.95;
+}
+.fsysGMemberTxt {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  fill: #0a1f33;
+}
+.fsysGConv {
+  fill-opacity: 0.16;
+  stroke-width: 1.5;
+}
+.fsysGFile {
+  fill: rgba(217, 195, 154, 0.15);
+  stroke: #d9c39a;
+  stroke-width: 1.3;
+}
+.fsysGTopic {
+  fill: none;
+  stroke: #a8b4c4;
+  stroke-width: 1.3;
+  stroke-dasharray: 2 3;
+}
+
+/* ---- edge vocabulary ---- */
+.fsysGEProd {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.2;
+}
+.fsysGEHub {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1.1;
+}
+.fsysGETag {
+  stroke: rgba(168, 180, 196, 0.42);
+  stroke-width: 1.2;
+  stroke-dasharray: 1.5 4;
+}
+.fsysGTie {
+  stroke: #e5484d;
+  stroke-width: 1.6;
+  stroke-dasharray: 0.06 0.03; /* pathLength=1 — dashed contested tie */
+  stroke-dashoffset: 0;
+  opacity: 0.9;
+}
+.fsysGSup {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.7;
+}
+.fsysGSupTip {
+  fill: rgba(255, 255, 255, 0.85);
+}
+
+/* animated members of the cast — transforms need the element's own box */
+.fsysGNew,
+.fsysGV2,
+.fsysGPulse,
+.fsysGRing,
+.fsysGSync,
+.fsysGPktDoc,
+.fsysGPktIn1,
+.fsysGPktOut {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* static / reduced-motion state: the finished picture — the new fact, its
+   edges, the contested tie, spec v2 + the ghosted v1 all visible; packets
+   and pulses are motion-only */
+.fsysGLinkA {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.fsysGV1 {
+  fill-opacity: 0.22;
+}
+.fsysGV1Ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 3;
+  opacity: 1;
+}
+.fsysGLblV1 {
+  opacity: 0.34;
+}
+.fsysGPulse {
+  fill: none;
+  stroke: #e5484d;
+  stroke-width: 1.6;
+  opacity: 0;
+}
+.fsysGPktIn1 {
+  fill: #e8703a;
+  opacity: 0;
+}
+/* the live doc's sync pulse + the square packet it sends to fact v2 */
+.fsysGSync {
+  fill: none;
+  stroke: #d9c39a;
+  stroke-width: 1.6;
+  stroke-dasharray: 3 3;
+  opacity: 0;
+}
+.fsysGPktDoc {
+  fill: #e8703a;
+  opacity: 0;
+}
+.fsysGRing {
+  fill: none;
+  stroke: #8fb0ff;
+  stroke-width: 1.6;
+  opacity: 0;
+}
+.fsysGPktOut {
+  fill: #8fb0ff;
+  opacity: 0;
+}
+
+/* node labels — the sandbox's own facts, tiny mono */
+.fsysGLbl {
+  font-family: var(--font-label);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  fill: rgba(255, 255, 255, 0.62);
+}
+.fsysGLblDim {
+  fill: rgba(255, 255, 255, 0.42);
+}
+
+/* captions — bottom-left, one at a time; static line under reduced motion */
+.fsysGCaps {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 8px;
+  min-height: 15px;
+  pointer-events: none;
+}
+.fsysGCap,
+.fsysGCapStatic {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #cbd5e1;
+}
+.fsysGCap {
+  opacity: 0;
+}
+
+/* ---- the legend · a footer strip under the graph ---- */
+.fsysGLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  align-items: center;
+  padding: 9px 14px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--font-label);
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  color: #9fb0c2;
+}
+.fsysGLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.fsysLgDot,
+.fsysLgMem,
+.fsysLgConv,
+.fsysLgFile,
+.fsysLgTopic,
+.fsysLgGhost {
+  display: inline-block;
+  flex: none;
+}
+.fsysLgDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e8703a;
+}
+.fsysLgMem {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.fsysLgMem + .fsysLgMem {
+  margin-left: -2px;
+}
+.fsysLgConv {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1.5px solid #8fa3b8;
+}
+.fsysLgFile {
+  width: 7px;
+  height: 9px;
+  border-radius: 1px;
+  border: 1.3px solid #d9c39a;
+}
+.fsysLgTopic {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.3px dashed #a8b4c4;
+}
+.fsysLgGhost {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.2px dashed rgba(255, 255, 255, 0.5);
+  background: rgba(232, 112, 58, 0.22);
+}
+.fsysLgLn {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  border-top: 1.4px solid rgba(255, 255, 255, 0.4);
+}
+.fsysLgLnTag {
+  border-top-style: dotted;
+  border-top-color: rgba(168, 180, 196, 0.8);
+}
+.fsysLgLnTie {
+  border-top-style: dashed;
+  border-top-color: #e5484d;
+}
+.fsysLgSup {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* ---- the 16s loop — only while open (restarts each open), never under
+       reduced motion (the static finished picture stands in) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .fsysGCapStatic {
+    display: none;
+  }
+  .fsysOpen .fsysGPktIn1 {
+    animation: fsysGPktIn1 16s linear infinite;
+  }
+  .fsysOpen .fsysGNew {
+    opacity: 0;
+    animation: fsysGNew 16s linear infinite;
+  }
+  .fsysOpen .fsysGLblN {
+    opacity: 0;
+    animation: fsysGLblN 16s linear infinite;
+  }
+  .fsysOpen .fsysGE1 {
+    stroke-dashoffset: 1;
+    animation: fsysGE1 16s linear infinite;
+  }
+  .fsysOpen .fsysGE2 {
+    opacity: 0;
+    animation: fsysGE2 16s linear infinite;
+  }
+  .fsysOpen .fsysGTieA {
+    opacity: 0;
+    animation: fsysGTieA 16s linear infinite;
+  }
+  .fsysOpen .fsysGPu1 {
+    animation: fsysGPulse 16s linear infinite;
+  }
+  .fsysOpen .fsysGPu2 {
+    animation: fsysGPulse 16s linear 0.25s infinite;
+  }
+  .fsysOpen .fsysGSync {
+    animation: fsysGSync 16s linear infinite;
+  }
+  .fsysOpen .fsysGPktDoc {
+    animation: fsysGPktDoc 16s linear infinite;
+  }
+  .fsysOpen .fsysGV2 {
+    opacity: 0;
+    animation: fsysGV2 16s linear infinite;
+  }
+  .fsysOpen .fsysGLblV2 {
+    opacity: 0;
+    animation: fsysGLblV2 16s linear infinite;
+  }
+  .fsysOpen .fsysGE3 {
+    stroke-dashoffset: 1;
+    animation: fsysGE3 16s linear infinite;
+  }
+  .fsysOpen .fsysGSupA {
+    stroke-dashoffset: 1;
+    opacity: 0;
+    animation: fsysGSupA 16s linear infinite;
+  }
+  .fsysOpen .fsysGSupTip {
+    opacity: 0;
+    animation: fsysGSupTipA 16s linear infinite;
+  }
+  .fsysOpen .fsysGV1 {
+    fill-opacity: 0.95;
+    animation: fsysGV1 16s linear infinite;
+  }
+  .fsysOpen .fsysGV1Ring {
+    opacity: 0;
+    animation: fsysGV1Ring 16s linear infinite;
+  }
+  .fsysOpen .fsysGLblV1 {
+    opacity: 0.62;
+    animation: fsysGLblV1 16s linear infinite;
+  }
+  .fsysOpen .fsysGRing {
+    animation: fsysGRing 16s linear infinite;
+  }
+  .fsysOpen .fsysGPktOut {
+    animation: fsysGPktOut 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap1 {
+    animation: fsysGCap1 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap2 {
+    animation: fsysGCap2 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap3 {
+    animation: fsysGCap3 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap4 {
+    animation: fsysGCap4 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap5 {
+    animation: fsysGCap5 16s linear infinite;
+  }
+  .fsysOpen .fsysGCap6 {
+    animation: fsysGCap6 16s linear infinite;
+  }
+}
+
+/* beat A · 0–6% — the write packet falls in and lands as the new fact */
+@keyframes fsysGPktIn1 {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  5% {
+    transform: translateY(224px);
+    opacity: 1;
+  }
+  6.5%,
+  100% {
+    transform: translateY(224px);
+    opacity: 0;
+  }
+}
+@keyframes fsysGNew {
+  0%,
+  5% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  7% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  8.5% {
+    transform: scale(1);
+  }
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes fsysGLblN {
+  0%,
+  6.5% {
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+/* beat B · 9–17% — typed edges: produced by its thread, tagged to the topic */
+@keyframes fsysGE1 {
+  0%,
+  9% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  14% {
+    stroke-dashoffset: 0;
+  }
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes fsysGE2 {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+/* beat C · 24–36% — the contested tie + red pulses on both parties */
+@keyframes fsysGTieA {
+  0%,
+  24% {
+    opacity: 0;
+  }
+  27% {
+    opacity: 0.9;
+  }
+  88% {
+    opacity: 0.9;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGPulse {
+  0%,
+  27% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  29.5% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  32.5% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  34% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  37%,
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+/* beat D · 40–66% — the live doc re-syncs: its square packet rides to
+   fact v2, which supersedes v1; v1 ghosts (kept) */
+@keyframes fsysGSync {
+  0%,
+  40% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  42.5% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  46%,
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+@keyframes fsysGPktDoc {
+  0%,
+  45% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  46.5% {
+    opacity: 1;
+  }
+  51.5% {
+    transform: translate(178px, 14px);
+    opacity: 1;
+  }
+  53%,
+  100% {
+    transform: translate(178px, 14px);
+    opacity: 0;
+  }
+}
+@keyframes fsysGV2 {
+  0%,
+  51.5% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  53.5% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  55% {
+    transform: scale(1);
+  }
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes fsysGLblV2 {
+  0%,
+  53% {
+    opacity: 0;
+  }
+  55.5% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGE3 {
+  0%,
+  55% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  59% {
+    stroke-dashoffset: 0;
+  }
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes fsysGSupA {
+  0%,
+  58% {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  59.5% {
+    opacity: 0.85;
+  }
+  63% {
+    stroke-dashoffset: 0;
+  }
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 0.85;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes fsysGSupTipA {
+  0%,
+  62% {
+    opacity: 0;
+  }
+  64% {
+    opacity: 0.85;
+  }
+  88% {
+    opacity: 0.85;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGV1 {
+  0%,
+  60% {
+    fill-opacity: 0.95;
+  }
+  66% {
+    fill-opacity: 0.22;
+  }
+  88% {
+    fill-opacity: 0.22;
+  }
+  96%,
+  100% {
+    fill-opacity: 0.95;
+  }
+}
+@keyframes fsysGV1Ring {
+  0%,
+  60% {
+    opacity: 0;
+  }
+  66% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGLblV1 {
+  0%,
+  60% {
+    opacity: 0.62;
+  }
+  66% {
+    opacity: 0.34;
+  }
+  88% {
+    opacity: 0.34;
+  }
+  96%,
+  100% {
+    opacity: 0.62;
+  }
+}
+/* beat E · 68–77% — a query pulls it back out, source attached */
+@keyframes fsysGRing {
+  0%,
+  68% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  73.5%,
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+@keyframes fsysGPktOut {
+  0%,
+  69% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  70.5% {
+    opacity: 1;
+  }
+  76% {
+    transform: translateY(-224px);
+    opacity: 1;
+  }
+  77.5%,
+  100% {
+    transform: translateY(-224px);
+    opacity: 0;
+  }
+}
+/* the caption track */
+@keyframes fsysGCap1 {
+  0% {
+    opacity: 0;
+  }
+  1.5% {
+    opacity: 1;
+  }
+  7.5% {
+    opacity: 1;
+  }
+  9.5%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGCap2 {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  20.5% {
+    opacity: 1;
+  }
+  22.5%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGCap3 {
+  0%,
+  24% {
+    opacity: 0;
+  }
+  26% {
+    opacity: 1;
+  }
+  36% {
+    opacity: 1;
+  }
+  38%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGCap4 {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  42% {
+    opacity: 1;
+  }
+  64% {
+    opacity: 1;
+  }
+  66%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGCap5 {
+  0%,
+  67.5% {
+    opacity: 0;
+  }
+  69.5% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fsysGCap6 {
+  0%,
+  82% {
+    opacity: 0;
+  }
+  84% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.fsysLayerTag {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.fsysLayerName {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+.fsysLayerDot {
+  color: var(--accent);
+}
+.fsysLayerPillars {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ---- the caption dock · swaps as stations activate ---- */
+.fsysDock {
+  margin-top: 26px;
+  min-height: 150px;
+  text-align: center;
+}
+.fsysDockIn {
+  max-width: 62ch;
+  margin-inline: auto;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fsysDockIn {
+    animation: fsysDockIn 0.16s ease-out;
+  }
+}
+.fsysDockTag {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.fsysDockBody {
+  margin-top: 7px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.fsysDockEg {
+  margin-top: 8px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--soft);
+}
+@keyframes fsysDockIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* =========================================================================
+   The BEFORE variant (BeforeSystem) — same language, grey and broken.
+   Slate wires, packets that evaporate mid-wire, a static "no shared memory"
+   pill, and a navy meeting slab that rhymes with the Follow-index slab.
+   ========================================================================= */
+.fsysBefore {
+  --fsys-slate: #64748b;
+}
+.fsysBefore .fsysTeam {
+  cursor: default;
+}
+.fsysBefore .fsysLine {
+  stroke: color-mix(in srgb, var(--fsys-slate) 55%, transparent);
+}
+.fsysPktLost {
+  fill: var(--accent);
+}
+.fsysPktLostSq {
+  fill: var(--accent);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fsysPktLost {
+    animation: fsysLost 2.6s linear calc(var(--i) * 0.85s) infinite;
+  }
+  .fsysPktLostSq {
+    animation: fsysLostSq 2.9s linear calc(var(--i) * 0.85s) infinite;
+  }
+}
+/* falls like the response diagram's write packets — but never arrives */
+@keyframes fsysLost {
+  0% {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.95;
+  }
+  50% {
+    transform: translateY(62px);
+    opacity: 0.85;
+  }
+  74%,
+  100% {
+    transform: translateY(94px);
+    opacity: 0;
+  }
+}
+@keyframes fsysLostSq {
+  0% {
+    transform: translate(-3.6px, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.95;
+  }
+  50% {
+    transform: translate(-3.6px, 66px);
+    opacity: 0.85;
+  }
+  74%,
+  100% {
+    transform: translate(-3.6px, 98px);
+    opacity: 0;
+  }
+}
+.fsysPillNo {
+  left: 50%;
+  top: 46px;
+  color: var(--fsys-slate);
+  cursor: default;
+}
+.fsysPillNo .fsysPillArrow {
+  color: var(--fsys-slate);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fsysPillNo {
+    animation: fsysBob 6.4s ease-in-out -2.2s infinite;
+  }
+}
+.fsysMeet {
+  display: block;
+  width: 100%;
+  padding: 20px 26px 18px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  background: linear-gradient(180deg, #12283f, #0a1f33);
+  box-shadow:
+    var(--shadow-rest),
+    0 14px 40px rgba(10, 31, 51, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.fsysMeetTag {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.fsysMeetName {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #fff;
+}
+.fsysMeetDot {
+  color: var(--fsys-slate);
+}
+.fsysMeetPillars {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.66);
+}
+.fsysSub {
+  margin: 18px auto 0;
+  max-width: 56ch;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+/* ---- idle float — the "flowing in space" motion (never under reduce) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .fsysPair {
+    animation: fsysBob 7s ease-in-out calc(var(--i) * -2.3s) infinite;
+  }
+  .fsysPillCap {
+    animation: fsysBob 6s ease-in-out -1.2s infinite;
+  }
+  .fsysPillRec {
+    animation: fsysBob 6.6s ease-in-out -3.6s infinite;
+  }
+}
+@keyframes fsysBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* ---- narrow screens ---- */
+@media (max-width: 620px) {
+  .fsysPair {
+    gap: 5px;
+    padding: 6px 8px;
+  }
+  .fsysAv {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+  .fsysAvDoc {
+    width: 22px;
+    height: 22px;
+  }
+  .fsysAvDoc i {
+    width: 10px;
+  }
+  /* the sub-line doesn't survive a quarter-width column — the chip reads
+     "Team docs", the station caption carries the rest */
+  .fsysDocsSub {
+    display: none;
+  }
+  .fsysDocs {
+    margin-top: 10px;
+  }
+  .fsysName {
+    font-size: 12.5px;
+  }
+  .fsysTool {
+    font-size: 9.5px;
+  }
+  .fsysPill {
+    font-size: 9.5px;
+    padding: 6px 10px;
+  }
+  .fsysLayerBtn {
+    padding: 16px 14px 14px;
+  }
+  .fsysMeet {
+    padding: 16px 14px 14px;
+  }
+  .fsysMeetPillars {
+    font-size: 10px;
+  }
+  .fsysPeek {
+    top: 9px;
+    right: 10px;
+    font-size: 8.5px;
+    padding: 4px 8px;
+  }
+  .fsysGWrap {
+    margin: 10px 10px 0;
+  }
+  /* node labels can't survive the scale-down — the captions + legend carry
+     the story on phones */
+  .fsysGLbls {
+    display: none;
+  }
+  .fsysGCap,
+  .fsysGCapStatic {
+    font-size: 9px;
+  }
+  .fsysGLegend {
+    font-size: 8px;
+    gap: 4px 10px;
+    padding: 8px 10px 9px;
+  }
+  .fsysLayerPillars {
+    font-size: 10px;
+  }
+  .fsysDock {
+    min-height: 190px;
+  }
+  .fsysDockBody {
+    font-size: 13.5px;
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/web.Dockerfile"
+  },
+  "deploy": {
+    "preDeployCommand": "echo 'web service: no migration — the database is owned/migrated by the API service'",
+    "healthcheckPath": "/auth/login",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "manifest_version": 3,
+  "name": "Follow",
+  "version": "0.1.0",
+  "description": "Turn any Google Doc, Sheet, or Slide into a tracked Document with provenance tracking, AI assistance, and collaborative intelligence.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "identity",
+    "scripting",
+    "sidePanel",
+    "alarms",
+    "clipboardRead",
+    "contextMenus"
+  ],
+  "oauth2": {
+    "client_id": "502240205650-kifr5qovf2810ejno2rb3j1k1r1vsg8v.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/presentations"
+    ]
+  },
+  "host_permissions": [
+    "https://docs.google.com/*",
+    "https://docs.googleapis.com/*",
+    "https://sheets.googleapis.com/*",
+    "https://slides.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "dist/background/service-worker.js"
+  },
+  "commands": {
+    "toggle-follow": {
+      "suggested_key": {
+        "default": "Ctrl+J",
+        "mac": "Command+J"
+      },
+      "description": "Toggle Follow panel"
+    },
+    "toggle-provenance": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "Command+Shift+P"
+      },
+      "description": "Toggle Provenance panel"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docs.google.com/document/*",
+        "https://docs.google.com/spreadsheets/*",
+        "https://docs.google.com/presentation/*"
+      ],
+      "js": ["dist/content/canvas-annotate-init.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://docs.google.com/document/*",
+        "https://docs.google.com/spreadsheets/*",
+        "https://docs.google.com/presentation/*"
+      ],
+      "js": ["dist/content/index.js"],
+      "css": ["dist/styles/extension.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
