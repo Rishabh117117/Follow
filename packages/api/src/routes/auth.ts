@@ -10,7 +10,7 @@ import { Hono } from 'hono'
 import { db } from '../db/index'
 import { users } from '../db/schema/users'
 import { workspaces, workspaceMembers } from '../db/schema/workspaces'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 
 const authRouter = new Hono()
 
@@ -34,17 +34,17 @@ authRouter.post('/extension-login', async (c) => {
     if (!data.email) {
       return c.json({ error: { message: 'Could not retrieve email from Google' } }, 401)
     }
-    profile = { email: data.email, name: data.name ?? data.email.split('@')[0]!, picture: data.picture }
+    profile = {
+      email: data.email,
+      name: data.name ?? data.email.split('@')[0]!,
+      picture: data.picture,
+    }
   } catch (err) {
     return c.json({ error: { message: 'Failed to validate Google token' } }, 500)
   }
 
   // Find or create user
-  let [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, profile.email))
-    .limit(1)
+  let [user] = await db.select().from(users).where(eq(users.email, profile.email)).limit(1)
 
   if (!user) {
     const [created] = await db
@@ -73,11 +73,12 @@ authRouter.post('/extension-login', async (c) => {
     workspace = { id: memberships[0]!.workspaceId }
   } else {
     // Create workspace for new user
-    const slug = profile.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 30) + '-ws'
+    const slug =
+      profile.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 30) + '-ws'
 
     const [newWorkspace] = await db
       .insert(workspaces)
@@ -122,11 +123,7 @@ authRouter.post('/resolve-user', async (c) => {
   }
 
   // Find or create user
-  let [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1)
+  let [user] = await db.select().from(users).where(eq(users.email, body.email)).limit(1)
 
   if (!user) {
     const name = body.name ?? body.email.split('@')[0]!
@@ -142,36 +139,57 @@ authRouter.post('/resolve-user', async (c) => {
     user = created!
   }
 
-  // Find existing workspace membership first
+  // Find the user's ACTIVE memberships (not pending/removed, not soft-deleted
+  // workspaces). Deterministic landing: prefer the workspace the user OWNS
+  // (their personal one), oldest first — so a multi-workspace user always lands
+  // in their own space on login, never in a shared one by DB-order accident.
   const memberships = await db
-    .select({ workspaceId: workspaceMembers.workspaceId })
+    .select({
+      workspaceId: workspaceMembers.workspaceId,
+      ownerId: workspaces.ownerId,
+      createdAt: workspaces.createdAt,
+    })
     .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, user.id))
-    .limit(1)
+    .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+    .where(
+      and(
+        eq(workspaceMembers.userId, user.id),
+        eq(workspaceMembers.status, 'active'),
+        isNull(workspaces.deletedAt)
+      )
+    )
 
   if (memberships.length > 0) {
+    const byOldest = (a: (typeof memberships)[number], b: (typeof memberships)[number]) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    const owned = memberships.filter((m) => m.ownerId === user.id).sort(byOldest)
+    const chosen = owned[0] ?? [...memberships].sort(byOldest)[0]!
     return c.json({
       data: {
         userId: user.id,
-        workspaceId: memberships[0]!.workspaceId,
+        workspaceId: chosen.workspaceId,
       },
     })
   }
 
-  // Also check if user owns any workspace directly
+  // No active membership — but the user may own a workspace whose membership row
+  // was removed. Re-add them as owner and return it.
   const ownedWorkspaces = await db
     .select({ id: workspaces.id })
     .from(workspaces)
-    .where(eq(workspaces.ownerId, user.id))
+    .where(and(eq(workspaces.ownerId, user.id), isNull(workspaces.deletedAt)))
     .limit(1)
 
   if (ownedWorkspaces.length > 0) {
-    // Add membership and return
-    await db.insert(workspaceMembers).values({
-      workspaceId: ownedWorkspaces[0]!.id,
-      userId: user.id,
-      role: 'admin',
-    }).onConflictDoNothing()
+    await db
+      .insert(workspaceMembers)
+      .values({
+        workspaceId: ownedWorkspaces[0]!.id,
+        userId: user.id,
+        role: 'owner',
+        status: 'active',
+      })
+      .onConflictDoNothing()
 
     return c.json({
       data: {
@@ -201,7 +219,8 @@ authRouter.post('/resolve-user', async (c) => {
   await db.insert(workspaceMembers).values({
     workspaceId: newWorkspace!.id,
     userId: user.id,
-    role: 'admin',
+    role: 'owner',
+    status: 'active',
   })
 
   return c.json({
