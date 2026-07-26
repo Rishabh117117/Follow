@@ -70,13 +70,19 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (!bundle) return {}
 
   const headers: Record<string, string> = { Authorization: `Bearer ${bundle.token}` }
-  // x-workspace-id stays a request input (the membership guard is the next
-  // sprint). Prefer the mint route's server-derived workspace; fall back to URL.
-  let ws = bundle.activeWorkspaceId ?? ''
-  if (!ws && typeof window !== 'undefined') {
+  // teams-1: the URL is the source of truth for "which workspace am I in".
+  // Prefer the `/workspace/<uuid>` in the path over the mint bundle's
+  // activeWorkspaceId (the per-session default) — otherwise a workspace switch
+  // wouldn't take effect until the cached bearer re-mints (~25 min). This is
+  // safe post security-gate-1: the membership guard verifies whatever workspace
+  // the header claims, so a non-member just gets a 403. Off a workspace route
+  // (e.g. /settings/*), fall back to the default workspace.
+  let ws = ''
+  if (typeof window !== 'undefined') {
     const wsMatch = window.location.pathname.match(/\/workspace\/([0-9a-f-]{36})/)
     if (wsMatch) ws = wsMatch[1]!
   }
+  if (!ws) ws = bundle.activeWorkspaceId ?? ''
   if (ws) headers['x-workspace-id'] = ws
   return headers
 }

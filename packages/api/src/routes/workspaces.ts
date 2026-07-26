@@ -240,18 +240,60 @@ workspacesRouter.post(
     const workspaceId = c.req.param('id')
     const { email, role } = c.req.valid('json')
     const userId = c.get('userId')
+
+    // Don't re-invite someone who's already an active member.
+    const [existingMember] = await db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(users.email, email),
+          eq(workspaceMembers.status, 'active')
+        )
+      )
+      .limit(1)
+    if (existingMember) {
+      return c.json(
+        {
+          data: null,
+          error: { code: 'ALREADY_MEMBER', message: 'That person is already a member' },
+        },
+        409
+      )
+    }
+
     const inviteToken = nanoid(32)
 
-    const [invite] = await db
-      .insert(workspaceMembers)
-      .values({
-        workspaceId,
-        role,
-        inviteEmail: email,
-        inviteToken,
-        status: 'pending',
-      })
-      .returning()
+    // Keep at most one pending invite per email — reissue the token on the
+    // existing row rather than piling up duplicate pending rows (there's no DB
+    // unique constraint on (workspaceId, userId) yet).
+    const [pending] = await db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.inviteEmail, email),
+          eq(workspaceMembers.status, 'pending')
+        )
+      )
+      .limit(1)
+
+    let invite
+    if (pending) {
+      ;[invite] = await db
+        .update(workspaceMembers)
+        .set({ role, inviteToken })
+        .where(eq(workspaceMembers.id, pending.id))
+        .returning()
+    } else {
+      ;[invite] = await db
+        .insert(workspaceMembers)
+        .values({ workspaceId, role, inviteEmail: email, inviteToken, status: 'pending' })
+        .returning()
+    }
 
     const inv = invite!
     await EventBus.emit({
@@ -290,6 +332,28 @@ workspacesRouter.post('/:id/join', zValidator('json', JoinSchema), async (c) => 
     )
   }
 
+  // Already an active member (joined via another invite, or double-clicked)?
+  // Consume this invite row and return the existing membership — never create a
+  // second active row for the same (workspace, user).
+  const [existing] = await db
+    .select()
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.status, 'active')
+      )
+    )
+    .limit(1)
+  if (existing) {
+    await db
+      .update(workspaceMembers)
+      .set({ status: 'removed', inviteToken: null })
+      .where(eq(workspaceMembers.id, invite.id))
+    return c.json({ data: existing, error: null })
+  }
+
   const [updated] = await db
     .update(workspaceMembers)
     .set({ userId, status: 'active', inviteToken: null, joinedAt: new Date() })
@@ -306,6 +370,53 @@ workspacesRouter.post('/:id/join', zValidator('json', JoinSchema), async (c) => 
   })
 
   return c.json({ data: member, error: null })
+})
+
+// Leave a workspace (self-removal). The owner can't leave — they transfer or
+// delete. requirePermission('viewer') guarantees the caller is a member.
+workspacesRouter.post('/:id/leave', requirePermission('viewer'), async (c) => {
+  const workspaceId = c.req.param('id')
+  const userId = c.get('userId')
+
+  const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))
+  if (workspace && workspace.ownerId === userId) {
+    return c.json(
+      {
+        data: null,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'The owner cannot leave. Transfer ownership or delete the workspace.',
+        },
+      },
+      403
+    )
+  }
+
+  const [removed] = await db
+    .update(workspaceMembers)
+    .set({ status: 'removed' })
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.status, 'active')
+      )
+    )
+    .returning()
+
+  if (!removed) {
+    return c.json({ data: null, error: { code: 'NOT_FOUND', message: 'Not a member' } }, 404)
+  }
+
+  await EventBus.emit({
+    workspaceId,
+    userId,
+    actionType: 'member_left',
+    objectType: 'workspace_member',
+    objectId: removed.id,
+  })
+
+  return c.json({ data: { ok: true }, error: null })
 })
 
 workspacesRouter.get('/:id/members', requirePermission('viewer'), async (c) => {

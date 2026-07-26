@@ -63,6 +63,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 
   const baseId = workspaceId ? `/workspace/${workspaceId}` : '/workspace/demo'
 
+  // teams-1: the shell is chrome-less, so the command palette is where the
+  // workspace/teams actions live (switch, manage members, leave).
   const navCommands: CommandItem[] = [
     {
       id: 'nav-overview',
@@ -74,6 +76,28 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       },
     },
     {
+      id: 'nav-switch-workspace',
+      label: 'Switch workspace',
+      description: 'Choose a different workspace',
+      onSelect: () => {
+        router.push('/workspace')
+        close()
+      },
+    },
+    ...(workspaceId
+      ? [
+          {
+            id: 'nav-members',
+            label: 'Manage members',
+            description: 'Invite teammates and manage roles',
+            onSelect: () => {
+              router.push(`/workspace/${workspaceId}/settings`)
+              close()
+            },
+          },
+        ]
+      : []),
+    {
       id: 'nav-settings',
       label: 'Go to Settings',
       description: 'Account and workspace settings',
@@ -82,6 +106,27 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         close()
       },
     },
+    ...(workspaceId
+      ? [
+          {
+            id: 'nav-leave',
+            label: 'Leave workspace',
+            description: 'Remove yourself from this workspace',
+            onSelect: async () => {
+              close()
+              if (!window.confirm('Leave this workspace? You will lose access until re-invited.')) {
+                return
+              }
+              const res = await api.post<{ ok: boolean }>(`/api/workspaces/${workspaceId}/leave`)
+              if (res.error) {
+                window.alert(res.error.message ?? 'Could not leave the workspace.')
+                return
+              }
+              router.push('/workspace')
+            },
+          },
+        ]
+      : []),
   ]
 
   const fileResults: CommandItem[] = (searchData?.data ?? [])
