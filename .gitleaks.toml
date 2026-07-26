@@ -1,0 +1,22 @@
+# gitleaks config for the public-mirror sync gate (.github/workflows/mirror-to-public.yml).
+# Default rules PLUS allowlists for the tree's legitimate non-secrets, so the
+# gate blocks REAL leaks without false-positiving on examples/tests/lockfiles.
+# If a sync ever fails on a false positive, add the path/regex here.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Legitimate non-secrets in the tree"
+paths = [
+  '''\.env\.example$''',            # placeholder env template
+  '''pnpm-lock\.yaml$''',           # dependency hashes, not secrets
+  '''.*\.lock$''',
+  '''(^|/)__tests__/''',            # tests carry fixed fake secrets
+  '''(^|/)docs/''',                 # audit reports reference burned/example wsp_ keys
+]
+regexes = [
+  '''test-auth-api-secret-0123456789-abcdef''',   # the fixed test AUTH_API_SECRET
+  '''wsp_\.\.\.''',                                 # placeholder wsp_ mentions in docs/comments
+  '''wsp_<[^>]*>''',
+]
