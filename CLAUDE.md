@@ -76,7 +76,7 @@ Ports: web 3009, api 3001, signal WS 3002, Yjs WS 3003, dashboard 4000. Containe
 
 ## Non-obvious gotchas
 
-- **Project location.** Work in `C:\Dev\Workspace App`. The OneDrive copy at `C:\Users\risha\OneDrive\Desktop\Workspace App` is empty stubs locked by the OneDrive driver (may clear after reboot). Never edit there.
+- **Project location.** Work in `C:\Dev\Workspace App`. The OneDrive-synced copy of this project is empty directory stubs locked by the OneDrive driver (may clear after reboot). Never edit there.
 - **Dynamic imports.** Several live paths load modules via `await import(...)` (e.g. `routes/gws.ts` → `services/gws/snapshot-capture`, `mcp/tools/scope-configure.ts` → `services/live-context/activate`, the semantic-index state-capture sites). Static `from '...'` greps miss these — when auditing dead code, grep for dynamic imports too.
 - **DB migrations.** As of **MIGRATE-1**, `src/db/migrations/` is a single clean baseline (`0000_*`) regenerated from `schema/index.ts`; the journal has exactly one entry. Deploys run `db:deploy` → `drizzle-kit migrate` (safe on populated DBs), **not** `push --force`. The old 8-file/3-entry stale journal is archived under `_archive/2026-06-15-migrate-1/`. First-time adoption on a `push`-provisioned DB uses `db:reset` (empty DB) or `db:baseline-stamp` (DB with data). See `docs/audits/MIGRATE-1-REPORT.md`.
 - **Launcher env loading.** `scripts/launch.ts` calls `loadDotenv` on `packages/api/.env.local` and `.env` **before** spawning children. Without this, children see `DATABASE_URL=undefined` and `db/index.ts` falls back to PGlite (ephemeral in-process DB). STABILIZE-1 fix; do not move.
