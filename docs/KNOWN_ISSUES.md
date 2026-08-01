@@ -28,7 +28,7 @@ For historical issue lists see `_archive/docs-2026-05-13/docs/ERRORS_AND_MISSING
 
 - **`nul` file at project root.** ~300 MB sentinel created by an earlier broken redirect (`> NUL` on a Unix shell). Safe to delete; will not regenerate. Not yet purged because git tracks it.
 
-- **OneDrive copy at `C:\Users\risha\OneDrive\Desktop\Workspace App`.** Empty directory stubs locked by the OneDrive driver. The real working tree is `C:\Dev\Workspace App` — work there. Stubs may clear after a reboot.
+- **OneDrive-synced copy of the project.** Empty directory stubs locked by the OneDrive driver. The real working tree is `C:\Dev\Workspace App` — work there. Stubs may clear after a reboot.
 
 ## ngrok / MCP
 
